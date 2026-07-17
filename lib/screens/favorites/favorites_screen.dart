@@ -77,12 +77,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
                 ),
               ),
             ),
-            AppBottomNav(currentIndex: 3, onTap: (i) {
+            AppBottomNav(currentIndex: 2, onTap: (i) {
               switch (i) {
                 case 0: Get.offNamed(AppRoutes.home);
                 case 1: Get.offNamed(AppRoutes.explore);
-                case 2: Get.offNamed(AppRoutes.myBookings);
-                case 3: break;
+                case 2: break;
+                case 3: Get.offNamed(AppRoutes.myBookings);
                 case 4: Get.offNamed(AppRoutes.profile);
               }
             }),

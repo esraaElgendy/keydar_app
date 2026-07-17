@@ -53,7 +53,7 @@ class _NavItem {
 const List<_NavItem> _items = [
   _NavItem(icon: Icons.home_rounded, label: 'الرئيسية'),
   _NavItem(icon: Icons.explore_rounded, label: 'استكشف'),
+  _NavItem(icon: Icons.favorite_outline_rounded, label: 'المفضلة'),
   _NavItem(icon: Icons.calendar_today_rounded, label: 'حجوزاتي'),
-  _NavItem(icon: Icons.favorite_rounded, label: 'المفضلة'),
   _NavItem(icon: Icons.person_outline_rounded, label: 'حسابي'),
 ];

@@ -50,8 +50,8 @@ class HomeScreen extends StatelessWidget {
               switch (i) {
                 case 0: break;
                 case 1: Get.toNamed(AppRoutes.explore);
-                case 2: Get.toNamed(AppRoutes.myBookings);
-                case 3: Get.toNamed(AppRoutes.favorites);
+                case 2: Get.toNamed(AppRoutes.favorites);
+                case 3: Get.toNamed(AppRoutes.myBookings);
                 case 4: Get.toNamed(AppRoutes.profile);
               }
             }),

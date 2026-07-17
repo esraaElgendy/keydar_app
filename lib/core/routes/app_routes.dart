@@ -16,4 +16,14 @@ class AppRoutes {
   static const String editProfile = '/edit-profile';
   static const String notifications = '/notifications';
   static const String contactUs = '/contact-us';
+  static const String accountType = '/account-type';
+  static const String ownerDashboard = '/owner-dashboard';
+  static const String myProperties = '/my-properties';
+  static const String addProperty = '/add-property';
+  static const String bookingDetail = '/booking-detail';
+  static const String hostProfile = '/host-profile';
+  static const String tenantsList = '/tenants-list';
+  static const String tenantDetail = '/tenant-detail';
+  static const String allOrders = '/all-orders';
+  static const String bookingRequests = '/booking-requests';
 }

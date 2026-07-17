@@ -39,32 +39,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ],
               ),
               ),
-              const SizedBox(height: 8),
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      "assets/logo/K.png",
-                      height: 70,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Text(
-                        "KeyDar",
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          height: 1.0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(

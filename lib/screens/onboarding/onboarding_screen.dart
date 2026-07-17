@@ -46,12 +46,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      Get.offNamed(AppRoutes.login);
+      Get.offNamed(AppRoutes.accountType);
     }
   }
 
   void _skip() {
-    Get.offNamed(AppRoutes.login);
+    Get.offNamed(AppRoutes.accountType);
   }
 
   @override

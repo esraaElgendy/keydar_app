@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/constants/account_type.dart';
 import '../../core/routes/app_routes.dart';
 import '../../widgets/custom_text_field.dart';
 
@@ -21,9 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.white,
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -39,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -64,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
@@ -141,7 +140,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: () => Get.offNamed(AppRoutes.home),
+                        onPressed: () {
+                          final type = Get.arguments as String? ?? 'searcher';
+                          AccountType.set(type);
+                          if (type == 'owner') {
+                            Get.offNamed(AppRoutes.ownerDashboard);
+                          } else {
+                            Get.offNamed(AppRoutes.home);
+                          }
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -154,8 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text(AppStrings.login),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         const Expanded(child: Divider(color: AppColors.fieldBorder)),
@@ -172,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Expanded(child: Divider(color: AppColors.fieldBorder)),
                       ],
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -196,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -227,7 +233,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ],
-            ),
           ),
         ),
       ),

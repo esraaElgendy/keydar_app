@@ -113,8 +113,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
               switch (i) {
                 case 0: Get.offNamed(AppRoutes.home);
                 case 1: break;
-                case 2: Get.offNamed(AppRoutes.myBookings);
-                case 3: Get.offNamed(AppRoutes.favorites);
+                case 2: Get.offNamed(AppRoutes.favorites);
+                case 3: Get.offNamed(AppRoutes.myBookings);
                 case 4: Get.offNamed(AppRoutes.profile);
               }
             }),
