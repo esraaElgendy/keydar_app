@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/property.dart';
+import '../property_image.dart';
 
 class PropertyCard extends StatelessWidget {
   final Property property;
@@ -40,16 +40,10 @@ class PropertyCard extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             child: Stack(
               children: [
-                Image.asset(
-                  AppAssets.building,
+                PropertyImage(
+                  imageUrl: property.imageUrl,
                   height: 115,
                   width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
-                    height: 115,
-                    color: AppColors.fieldBorder,
-                    child: const Icon(Icons.image_outlined, color: AppColors.grey, size: 40),
-                  ),
                 ),
                 Positioned(top: 0, left: 0, right: 0, bottom: 0, child: Center(
                   child: Row(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/auth_controller.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/routes/app_routes.dart';
@@ -14,6 +15,54 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreenState extends State<SignUpScreen> {
   bool _acceptTerms = false;
+
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  AuthController get _auth => AuthController.instance;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onRegister() async {
+    if (!_acceptTerms) {
+      Get.snackbar('تنبيه', 'يجب الموافقة على شروط الخدمة وسياسة الخصوصية أولاً');
+      return;
+    }
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      Get.snackbar('تنبيه', 'يرجى ملء جميع الحقول');
+      return;
+    }
+
+    final success = await _auth.register(
+      fullName: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      phone: _phoneController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (!success) {
+      Get.snackbar(
+        'تعذر إنشاء الحساب',
+        _auth.errorMessage.value ?? 'حدث خطأ ما، حاول مرة أخرى',
+      );
+      return;
+    }
+
+    // التسجيل يعيد توكن مباشرة — ننتقل لشاشة التحقق ثم للرئيسية.
+    Get.offNamed(AppRoutes.verification);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,27 +113,31 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const CustomTextField(
+                    CustomTextField(
                       label: AppStrings.fullName,
                       icon: Icons.person_outline,
+                      controller: _nameController,
                     ),
                     const SizedBox(height: 16),
-                    const CustomTextField(
+                    CustomTextField(
                       label: AppStrings.email,
                       icon: Icons.email_outlined,
+                      controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 16),
-                    const CustomTextField(
+                    CustomTextField(
                       label: AppStrings.phoneNumber,
                       icon: Icons.phone_outlined,
+                      controller: _phoneController,
                       keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 16),
-                    const CustomTextField(
+                    CustomTextField(
                       label: AppStrings.password,
                       icon: Icons.lock_outline,
                       isPassword: true,
+                      controller: _passwordController,
                     ),
                     const SizedBox(height: 18),
                     Row(
@@ -138,7 +191,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       width: double.infinity,
                       height: 54,
                       child: ElevatedButton(
-                        onPressed: () => Get.toNamed(AppRoutes.verification),
+                        onPressed: _auth.isLoading.value ? null : _onRegister,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: AppColors.white,
@@ -148,9 +201,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           elevation: 6,
                           shadowColor: AppColors.primary.withValues(alpha: 0.3),
                         ),
-                        child: const Text(
-                          AppStrings.createAccountBtn,
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        child: Obx(
+                          () => _auth.isLoading.value
+                              ? const SizedBox(
+                                  width: 24, height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(
+                                  AppStrings.createAccountBtn,
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
                         ),
                       ),
                     ),

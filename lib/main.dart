@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'controllers/app_controller.dart';
+import 'controllers/auth_controller.dart';
 import 'core/routes/app_routes.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/splash/splash_screen.dart';
@@ -45,6 +46,7 @@ class KeyDarApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       initialBinding: BindingsBuilder(() {
         Get.put(AppController());
+        Get.put(AuthController());
       }),
       theme: AppTheme.theme,
       textDirection: TextDirection.rtl,

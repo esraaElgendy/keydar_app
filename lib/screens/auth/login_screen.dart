@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/auth_controller.dart';
+import '../../core/constants/account_type.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
-import '../../core/constants/account_type.dart';
 import '../../core/routes/app_routes.dart';
 import '../../widgets/custom_text_field.dart';
 
@@ -16,21 +17,69 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
+
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  AuthController get _auth => AuthController.instance;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onLogin() async {
+    // تحديد نوع الحساب المختار (يصل عبر Get.arguments من شاشة اختيار النوع).
+    final type = Get.arguments as String? ?? AccountType.searcher;
+    _auth.setAccountType(type);
+
+    if (type == AccountType.owner) {
+      // الـ owner لم يربط بعد — ندخل مباشرة لشاشة لوحة التحكم.
+      Get.offNamed(AppRoutes.ownerDashboard);
+      return;
+    }
+
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      Get.snackbar('تنبيه', 'يرجى إدخال البريد وكلمة المرور');
+      return;
+    }
+
+    final success = await _auth.login(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (!success) {
+      Get.snackbar(
+        'تعذر تسجيل الدخول',
+        _auth.errorMessage.value ?? 'حدث خطأ ما، حاول مرة أخرى',
+      );
+      return;
+    }
+
+    Get.offNamed(AppRoutes.home);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  children: [
-                    const Spacer(),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      const Spacer(),
                     GestureDetector(
                       onTap: () => Get.back(),
                       child: const Icon(Icons.arrow_forward, color: AppColors.black, size: 24),
@@ -88,16 +137,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    const CustomTextField(
+                    CustomTextField(
                       label: AppStrings.emailOrPhone,
                       icon: Icons.person_outline,
+                      controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 18),
-                    const CustomTextField(
+                    CustomTextField(
                       label: AppStrings.password,
                       icon: Icons.lock_outline,
                       isPassword: true,
+                      controller: _passwordController,
                     ),
                     const SizedBox(height: 14),
                     Row(
@@ -140,15 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: () {
-                          final type = Get.arguments as String? ?? 'searcher';
-                          AccountType.set(type);
-                          if (type == 'owner') {
-                            Get.offNamed(AppRoutes.ownerDashboard);
-                          } else {
-                            Get.offNamed(AppRoutes.home);
-                          }
-                        },
+                        onPressed: _auth.isLoading.value ? null : _onLogin,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -158,7 +201,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           elevation: 0,
                           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        child: const Text(AppStrings.login),
+                        child: Obx(
+                          () => _auth.isLoading.value
+                              ? const SizedBox(
+                                  width: 24, height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(AppStrings.login),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -236,6 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

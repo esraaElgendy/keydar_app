@@ -126,22 +126,58 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Widget _propertyGrid() {
     final ctrl = Get.find<AppController>();
-    return ListView.builder(
-      key: ValueKey('prop_${ctrl.favorites.length}'),
-      itemCount: SampleData.properties.length * 2,
-      itemBuilder: (_, i) {
-        final p = SampleData.properties[i % SampleData.properties.length];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: PropertyCard(
-            property: p,
-            isFavorite: ctrl.isFavorite(p),
-            onFavoriteTap: () => ctrl.toggleFavorite(p),
-            onTap: () => Get.toNamed(AppRoutes.propertyDetails, arguments: p),
+    return Obx(() {
+      if (ctrl.allLoading.value && ctrl.allProperties.isEmpty) {
+        return const Center(
+          child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2.5),
+        );
+      }
+      if (ctrl.allError.value != null && ctrl.allProperties.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, color: AppColors.grey, size: 40),
+              const SizedBox(height: 10),
+              Text(
+                ctrl.allError.value!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: AppColors.grey),
+              ),
+              TextButton(
+                onPressed: ctrl.retryAll,
+                child: const Text('إعادة المحاولة', style: TextStyle(fontSize: 14, color: AppColors.primary)),
+              ),
+            ],
           ),
         );
-      },
-    );
+      }
+      final properties = ctrl.allProperties;
+      if (properties.isEmpty) {
+        return const Center(child: Text('لا توجد عقارات', style: TextStyle(color: AppColors.grey)));
+      }
+      return RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => ctrl.fetchAllProperties(silent: true),
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          key: ValueKey('prop_${ctrl.favorites.length}_${properties.length}'),
+          itemCount: properties.length,
+          itemBuilder: (_, i) {
+            final p = properties[i];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: PropertyCard(
+                property: p,
+                isFavorite: ctrl.isFavorite(p),
+                onFavoriteTap: () => ctrl.toggleFavorite(p),
+                onTap: () => Get.toNamed(AppRoutes.propertyDetails, arguments: p),
+              ),
+            );
+          },
+        ),
+      );
+    });
   }
 
   Widget _carGrid() {

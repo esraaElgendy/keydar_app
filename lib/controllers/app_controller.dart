@@ -1,12 +1,32 @@
+import 'dart:convert';
+
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../data/repositories/property_repository.dart';
 import '../models/sample_data.dart';
 import '../models/property.dart';
+import 'auth_controller.dart';
 
 class AppController extends GetxController {
-  final RxList<Property> _allProperties = RxList<Property>(SampleData.properties);
+  static const _favoritesKey = 'favorite_properties';
+
+  static AppController get instance => Get.find<AppController>();
+
+  final PropertyRepository _propertyRepo = PropertyRepository();
+
   final RxList<Car> _allCars = RxList<Car>(SampleData.cars);
   final RxList<Property> favorites = RxList<Property>();
   final RxList<Car> carFavorites = RxList<Car>();
+
+  /// أحدث العقارات القادمة من السيرفر (قسم "أحدث الإيجارات").
+  final RxList<Property> latestProperties = RxList<Property>();
+  final RxBool latestLoading = false.obs;
+  final RxnString latestError = RxnString();
+
+  /// جميع العقارات القادمة من السيرفر (الرئيسية + الاستكشف).
+  final RxList<Property> allProperties = RxList<Property>();
+  final RxBool allLoading = false.obs;
+  final RxnString allError = RxnString();
   final RxList<Property> ownerProperties = RxList<Property>([
     Property(title: 'شقة فاخرة في الرياض', type: 'شقة', location: 'الرياض، العليا', price: '3,200', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 4, bathrooms: 2, area: 120, image: 'assets/image/building.jpg', description: 'شقة فاخرة في موقع مميز', badge1: 'متاحة'),
     Property(title: 'فيلا مودرن في جدة', type: 'فيلا', location: 'جدة، الشاطئ', price: '5,000', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 5, bathrooms: 3, area: 250, image: 'assets/image/building.jpg', description: 'فيلا عصرية بإطلالة رائعة', badge1: 'متاحة'),
@@ -37,7 +57,7 @@ class AppController extends GetxController {
     filterAmenities.isNotEmpty;
 
   List<Property> get filteredProperties {
-    var list = _allProperties.toList();
+    var list = allProperties.toList();
     if (searchQuery.isNotEmpty) {
       final q = searchQuery.value;
       list = list.where((p) =>
@@ -60,10 +80,10 @@ class AppController extends GetxController {
 
   List<Property> get categoryFilteredProperties {
     final catIndex = selectedCategoryIndex.value;
-    if (catIndex == 0) return _allProperties;
+    if (catIndex == 0) return allProperties;
     final categoryTypes = ['', 'فيلا', 'شقة', 'مكتب'];
     final type = categoryTypes[catIndex];
-    return _allProperties.where((p) => p.type == type).toList();
+    return allProperties.where((p) => p.type == type).toList();
   }
 
   List<Car> get filteredCars {
@@ -74,12 +94,149 @@ class AppController extends GetxController {
     ).toList();
   }
 
+  /// قائمة أحدث الإيجارات مع تطبيق نص البحث الحالي.
+  List<Property> get latestFilteredProperties {
+    final q = searchQuery.value.trim();
+    if (q.isEmpty) return latestProperties;
+    return latestProperties
+        .where((p) =>
+            p.title.contains(q) ||
+            p.location.contains(q) ||
+            p.type.contains(q))
+        .toList();
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    _loadFavorites();
+    fetchLatestProperties();
+    fetchAllProperties();
+  }
+
+  /// تحميل العقارات المفضلة المحفوظة محلياً عند تشغيل التطبيق.
+  Future<void> _loadFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_favoritesKey);
+      if (raw == null || raw.isEmpty) return;
+      final list = (jsonDecode(raw) as List)
+          .map((e) => Property.fromJson((e as Map).cast<String, dynamic>()))
+          .toList();
+      favorites.assignAll(list);
+    } catch (_) {
+      // نبدأ بقائمة فارغة إذا كان الحفظ تالفاً.
+    }
+  }
+
+  /// حفظ المفضلة محلياً ليستمر وجودها بعد إغلاق التطبيق.
+  Future<void> _saveFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _favoritesKey,
+        jsonEncode(favorites.map((p) => p.toJson()).toList()),
+      );
+    } catch (_) {
+      // فشل الحفظ محلياً لا يوقف التطبيق.
+    }
+  }
+
+  /// مزامنة المفضلة مع السيرفر: إن كان مسجلاً دخوله نجلب من الـ API
+  /// وإلا نعرض المفضلة المحلية فقط.
+  Future<void> syncFavorites() async {
+    if (!AuthController.instance.isLoggedIn) {
+      await _loadFavorites();
+      return;
+    }
+    try {
+      final list = await _propertyRepo.fetchFavorites();
+      favorites.assignAll(list);
+      await _saveFavorites();
+    } catch (_) {
+      // فشل المزامنة — نعرض المحلية المتاحة.
+    }
+  }
+
+  /// جلب جميع العقارات من السيرفر.
+  /// [silent] يمنع إظهار شاشة التحميل (يُستخدم عند سحب الصفحة للتحديث).
+  Future<void> fetchAllProperties({bool silent = false}) async {
+    if (!silent) allLoading.value = true;
+    allError.value = null;
+    try {
+      final list = await _propertyRepo.fetchAll();
+      allProperties.assignAll(list);
+      if (allProperties.isEmpty) {
+        allError.value = 'لا توجد عقارات متاحة حالياً';
+      }
+    } catch (e) {
+      allError.value = 'تعذر تحميل العقارات، تحقق من اتصالك بالإنترنت';
+    } finally {
+      allLoading.value = false;
+    }
+  }
+
+  void retryAll() => fetchAllProperties();
+
+  /// جلب أحدث العقارات من السيرفر.
+  /// [silent] يمنع إظهار شاشة التحميل (يُستخدم عند سحب الصفحة للتحديث).
+  Future<void> fetchLatestProperties({int limit = 6, bool silent = false}) async {
+    if (!silent) latestLoading.value = true;
+    latestError.value = null;
+    try {
+      final list = await _propertyRepo.fetchLatest(limit: limit);
+      latestProperties.assignAll(list);
+      if (latestProperties.isEmpty) {
+        latestError.value = 'لا توجد عقارات متاحة حالياً';
+      }
+    } catch (e) {
+      latestError.value = 'تعذر تحميل العقارات، تحقق من اتصالك بالإنترنت';
+    } finally {
+      latestLoading.value = false;
+    }
+  }
+
+  void retryLatest() => fetchLatestProperties();
+
+  /// قلب حالة التفضيل: يحدّث المفضلة محلياً فوراً ثم يزامن مع السيرفر
+  /// إذا كان المستخدم مسجّلاً دخوله.
   void toggleFavorite(Property p) {
-    if (favorites.contains(p)) {
+    final isFav = favorites.contains(p);
+    if (isFav) {
       favorites.remove(p);
     } else {
       favorites.add(p);
     }
+    _saveFavorites();
+    AuthController.instance.fetchStatistics();
+
+    final id = p.id;
+    if (id == null || !AuthController.instance.isLoggedIn) return;
+
+    // مزامنة مع السيرفر بعد التحديث المحلي.
+    if (isFav) {
+      _propertyRepo.removeFavorite(propertyId: id).then((ok) {
+        if (!ok) _revertFavorite(p, addBack: true);
+      }).catchError((_) {
+        _revertFavorite(p, addBack: true);
+      });
+    } else {
+      _propertyRepo.addFavorite(propertyId: id).then((ok) {
+        if (!ok) _revertFavorite(p, addBack: false);
+      }).catchError((_) {
+        _revertFavorite(p, addBack: false);
+      });
+    }
+  }
+
+  /// إعادة الحالة السابقة إذا فشلت مزامنة المفضلة مع السيرفر.
+  void _revertFavorite(Property p, {required bool addBack}) {
+    if (addBack) {
+      if (!favorites.contains(p)) favorites.add(p);
+    } else {
+      favorites.remove(p);
+    }
+    _saveFavorites();
   }
 
   void toggleCarFavorite(Car c) {

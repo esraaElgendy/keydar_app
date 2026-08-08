@@ -21,6 +21,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // مزامنة المفضلة من السيرفر عند فتح الشاشة.
+    Get.find<AppController>().syncFavorites();
   }
 
   @override
