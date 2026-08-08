@@ -4,6 +4,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/routes/app_routes.dart';
 import '../../controllers/app_controller.dart';
+import '../../controllers/auth_controller.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/cards/property_card.dart';
 
@@ -20,29 +21,37 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const SizedBox(height: 16),
-                    const _Header(),
-                    const SizedBox(height: 16),
-                    _SearchBar(ctrl: ctrl),
-                    const SizedBox(height: 16),
-                    const _BannerCarousel(),
-                    const SizedBox(height: 20),
-                    const _SectionHeader(title: 'أحدث الإيجارات', onViewAll: _goExplore),
-                    const SizedBox(height: 12),
-                    _HorizontalPropertyList(ctrl: ctrl),
-                    const SizedBox(height: 20),
-                    _CategoryTabs(ctrl: ctrl),
-                    const SizedBox(height: 12),
-                    _VerticalPropertyList(ctrl: ctrl),
-                    const SizedBox(height: 20),
-                    const _CarRentalBanner(),
-                    const SizedBox(height: 24),
-                  ],
+              child: RefreshIndicator(
+                onRefresh: () => Future.wait([
+                  ctrl.fetchLatestProperties(silent: true),
+                  ctrl.fetchAllProperties(silent: true),
+                ]),
+                color: AppColors.primary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const SizedBox(height: 16),
+                      const _Header(),
+                      const SizedBox(height: 16),
+                      _SearchBar(ctrl: ctrl),
+                      const SizedBox(height: 16),
+                      const _BannerCarousel(),
+                      const SizedBox(height: 20),
+                      const _SectionHeader(title: 'أحدث الإيجارات', onViewAll: _goExplore),
+                      const SizedBox(height: 12),
+                      _HorizontalPropertyList(ctrl: ctrl),
+                      const SizedBox(height: 20),
+                      _CategoryTabs(ctrl: ctrl),
+                      const SizedBox(height: 12),
+                      _VerticalPropertyList(ctrl: ctrl),
+                      const SizedBox(height: 20),
+                      const _CarRentalBanner(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -71,7 +80,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Text('مرحباً، محمد 👋', style: TextStyle(fontSize: 14, color: AppColors.grey)),
+        Obx(() {
+          final firstName = AuthController.instance.customer.value?.firstName?.trim();
+          final greeting = (firstName != null && firstName.isNotEmpty) ? firstName : 'محمد';
+          return Text('مرحباً، $greeting 👋', style: const TextStyle(fontSize: 14, color: AppColors.grey));
+        }),
         const Spacer(),
         Stack(
           children: [
@@ -204,10 +217,41 @@ class _HorizontalPropertyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final properties = ctrl.filteredProperties;
+      if (ctrl.latestLoading.value && ctrl.latestProperties.isEmpty) {
+        return const SizedBox(
+          height: 270,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2.5),
+          ),
+        );
+      }
+      if (ctrl.latestError.value != null && ctrl.latestProperties.isEmpty) {
+        return SizedBox(
+          height: 180,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, color: AppColors.grey, size: 34),
+                const SizedBox(height: 8),
+                Text(
+                  ctrl.latestError.value!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: AppColors.grey),
+                ),
+                TextButton(
+                  onPressed: ctrl.retryLatest,
+                  child: const Text('إعادة المحاولة', style: TextStyle(fontSize: 13, color: AppColors.primary)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      final properties = ctrl.latestFilteredProperties;
       if (properties.isEmpty) {
         return const SizedBox(
-          height: 100,
+          height: 150,
           child: Center(child: Text('لا توجد نتائج', style: TextStyle(color: AppColors.grey))),
         );
       }
@@ -283,10 +327,41 @@ class _VerticalPropertyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      if (ctrl.allLoading.value && ctrl.allProperties.isEmpty) {
+        return const SizedBox(
+          height: 160,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2.5),
+          ),
+        );
+      }
+      if (ctrl.allError.value != null && ctrl.allProperties.isEmpty) {
+        return SizedBox(
+          height: 180,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, color: AppColors.grey, size: 34),
+                const SizedBox(height: 8),
+                Text(
+                  ctrl.allError.value!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: AppColors.grey),
+                ),
+                TextButton(
+                  onPressed: ctrl.retryAll,
+                  child: const Text('إعادة المحاولة', style: TextStyle(fontSize: 13, color: AppColors.primary)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       final properties = ctrl.categoryFilteredProperties;
       if (properties.isEmpty) {
         return const SizedBox(
-          height: 100,
+          height: 150,
           child: Center(child: Text('لا توجد عقارات', style: TextStyle(color: AppColors.grey))),
         );
       }

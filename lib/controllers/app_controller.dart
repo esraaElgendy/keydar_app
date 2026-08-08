@@ -1,12 +1,24 @@
 import 'package:get/get.dart';
+import '../data/repositories/property_repository.dart';
 import '../models/sample_data.dart';
 import '../models/property.dart';
 
 class AppController extends GetxController {
-  final RxList<Property> _allProperties = RxList<Property>(SampleData.properties);
+  final PropertyRepository _propertyRepo = PropertyRepository();
+
   final RxList<Car> _allCars = RxList<Car>(SampleData.cars);
   final RxList<Property> favorites = RxList<Property>();
   final RxList<Car> carFavorites = RxList<Car>();
+
+  /// أحدث العقارات القادمة من السيرفر (قسم "أحدث الإيجارات").
+  final RxList<Property> latestProperties = RxList<Property>();
+  final RxBool latestLoading = false.obs;
+  final RxnString latestError = RxnString();
+
+  /// جميع العقارات القادمة من السيرفر (الرئيسية + الاستكشف).
+  final RxList<Property> allProperties = RxList<Property>();
+  final RxBool allLoading = false.obs;
+  final RxnString allError = RxnString();
   final RxList<Property> ownerProperties = RxList<Property>([
     Property(title: 'شقة فاخرة في الرياض', type: 'شقة', location: 'الرياض، العليا', price: '3,200', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 4, bathrooms: 2, area: 120, image: 'assets/image/building.jpg', description: 'شقة فاخرة في موقع مميز', badge1: 'متاحة'),
     Property(title: 'فيلا مودرن في جدة', type: 'فيلا', location: 'جدة، الشاطئ', price: '5,000', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 5, bathrooms: 3, area: 250, image: 'assets/image/building.jpg', description: 'فيلا عصرية بإطلالة رائعة', badge1: 'متاحة'),
@@ -37,7 +49,7 @@ class AppController extends GetxController {
     filterAmenities.isNotEmpty;
 
   List<Property> get filteredProperties {
-    var list = _allProperties.toList();
+    var list = allProperties.toList();
     if (searchQuery.isNotEmpty) {
       final q = searchQuery.value;
       list = list.where((p) =>
@@ -60,10 +72,10 @@ class AppController extends GetxController {
 
   List<Property> get categoryFilteredProperties {
     final catIndex = selectedCategoryIndex.value;
-    if (catIndex == 0) return _allProperties;
+    if (catIndex == 0) return allProperties;
     final categoryTypes = ['', 'فيلا', 'شقة', 'مكتب'];
     final type = categoryTypes[catIndex];
-    return _allProperties.where((p) => p.type == type).toList();
+    return allProperties.where((p) => p.type == type).toList();
   }
 
   List<Car> get filteredCars {
@@ -73,6 +85,65 @@ class AppController extends GetxController {
       c.name.contains(q) || c.model.contains(q)
     ).toList();
   }
+
+  /// قائمة أحدث الإيجارات مع تطبيق نص البحث الحالي.
+  List<Property> get latestFilteredProperties {
+    final q = searchQuery.value.trim();
+    if (q.isEmpty) return latestProperties;
+    return latestProperties
+        .where((p) =>
+            p.title.contains(q) ||
+            p.location.contains(q) ||
+            p.type.contains(q))
+        .toList();
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    fetchLatestProperties();
+    fetchAllProperties();
+  }
+
+  /// جلب جميع العقارات من السيرفر.
+  /// [silent] يمنع إظهار شاشة التحميل (يُستخدم عند سحب الصفحة للتحديث).
+  Future<void> fetchAllProperties({bool silent = false}) async {
+    if (!silent) allLoading.value = true;
+    allError.value = null;
+    try {
+      final list = await _propertyRepo.fetchAll();
+      allProperties.assignAll(list);
+      if (allProperties.isEmpty) {
+        allError.value = 'لا توجد عقارات متاحة حالياً';
+      }
+    } catch (e) {
+      allError.value = 'تعذر تحميل العقارات، تحقق من اتصالك بالإنترنت';
+    } finally {
+      allLoading.value = false;
+    }
+  }
+
+  void retryAll() => fetchAllProperties();
+
+  /// جلب أحدث العقارات من السيرفر.
+  /// [silent] يمنع إظهار شاشة التحميل (يُستخدم عند سحب الصفحة للتحديث).
+  Future<void> fetchLatestProperties({int limit = 6, bool silent = false}) async {
+    if (!silent) latestLoading.value = true;
+    latestError.value = null;
+    try {
+      final list = await _propertyRepo.fetchLatest(limit: limit);
+      latestProperties.assignAll(list);
+      if (latestProperties.isEmpty) {
+        latestError.value = 'لا توجد عقارات متاحة حالياً';
+      }
+    } catch (e) {
+      latestError.value = 'تعذر تحميل العقارات، تحقق من اتصالك بالإنترنت';
+    } finally {
+      latestLoading.value = false;
+    }
+  }
+
+  void retryLatest() => fetchLatestProperties();
 
   void toggleFavorite(Property p) {
     if (favorites.contains(p)) {
