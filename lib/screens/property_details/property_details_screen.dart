@@ -103,10 +103,15 @@ class _ImageGallery extends StatelessWidget {
     final ctrl = Get.find<AppController>();
     return Stack(
       children: [
-        PropertyImage(
-          imageUrl: prop.imageUrl,
+        Image.asset(
+          AppAssets.building,
           height: 280,
           width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => Container(
+            height: 280, color: AppColors.darkBlue,
+            child: const Icon(Icons.image, color: AppColors.white, size: 60),
+          ),
         ),
         Positioned(top: 50, right: 16, child: GestureDetector(
           onTap: () => Get.back(),
