@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/app_controller.dart';
+import '../../controllers/auth_controller.dart';
 import '../../core/constants/app_colors.dart';
-import '../../models/property.dart';
+import '../../data/repositories/property_repository.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -20,10 +21,19 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   String _propertyDescription = '';
   String _propertyType = 'فيلا';
   String _propertyCity = 'الرياض';
+  String _furnishing = 'مفروش';
+  String _area = '';
+  String _beds = '';
+  String _baths = '';
+  String _guests = '';
+  String _dailyPrice = '';
   String _monthlyPrice = '';
+  String _yearlyPrice = '';
 
   // Step 2
   String _address = '';
+  String _buildingNumber = '';
+  String _floor = '';
 
   // Step 3
   bool _hasMainImage = false;
@@ -38,6 +48,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final Set<int> _bookedDays = {15, 16, 17};
   final Set<int> _availableDays = {1, 2, 3, 5, 8, 10, 12, 20, 22, 25, 28, 29, 30};
   int? _selectedDay;
+
+  bool _publishing = false;
 
   @override
   void initState() {
@@ -68,26 +80,80 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     }
   }
 
-  void _publish() {
-    final ctrl = Get.find<AppController>();
-    ctrl.ownerProperties.add(Property(
-      title: _propertyName.isEmpty ? 'عقار جديد' : _propertyName,
-      type: _propertyType,
-      location: '$_propertyCity${_address.isNotEmpty ? "، $_address" : ""}',
-      price: _monthlyPrice.isEmpty ? '0' : _monthlyPrice,
-      period: 'شهري',
-      rating: 4.5,
-      reviews: 0,
-      bedrooms: 4,
-      bathrooms: 2,
-      area: 120,
-      image: 'assets/image/building.jpg',
-      description: _propertyDescription.isEmpty ? 'وصف العقار' : _propertyDescription,
-      badge1: 'نشط',
-      amenities: _selectedAmenities.toList(),
-    ));
-    Get.back();
+  Future<void> _publish() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_propertyName.trim().isEmpty || _propertyDescription.trim().isEmpty) {
+      Get.snackbar('معلومات ناقصة', 'أدخل اسم العقار ووصفه قبل النشر',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primary,
+          colorText: AppColors.white);
+      return;
+    }
+    setState(() => _publishing = true);
+    try {
+      final created = await PropertyRepository().createOwnerProperty(
+        title: _propertyName.trim(),
+        description: _propertyDescription.trim(),
+        location: (_propertyCity + (_address.isNotEmpty ? '، $_address' : '')).trim(),
+        city: _cityMap[_propertyCity] ?? 'Riyadh',
+        propertyType: _typeMap[_propertyType] ?? 'villa',
+        furnishing: _furnishingMap[_furnishing] ?? 'furnished',
+        area: num.tryParse(_area) ?? 0,
+        prices: {
+          'daily': num.tryParse(_dailyPrice.replaceAll(',', '')) ?? 0,
+          'monthly': num.tryParse(_monthlyPrice.replaceAll(',', '')) ?? 0,
+          'yearly': num.tryParse(_yearlyPrice.replaceAll(',', '')) ?? 0,
+        },
+        period: 'monthly',
+        status: 'available',
+        beds: int.tryParse(_beds) ?? 1,
+        baths: int.tryParse(_baths) ?? 1,
+        kitchens: 0,
+        guests: int.tryParse(_guests) ?? 1,
+        floor: _floor.isEmpty ? null : _floor,
+        buildingNumber: _buildingNumber.isEmpty ? null : _buildingNumber,
+        amenities: _selectedAmenities.map((a) => _amenityMap[a] ?? a).toList(),
+        primaryAmenities: _selectedAmenities.map((a) => _amenityMap[a] ?? a).toList(),
+        cancellationPolicy: 'Flexible',
+      );
+      final ctrl = Get.find<AppController>();
+      ctrl.ownerProperties.insert(0, created);
+      // تحديث إحصائيات المالك بعد إضافة عقار جديد.
+      AuthController.instance.fetchOwnerStats();
+      ctrl.fetchOwnerMyProperties(silent: true);
+      Get.snackbar('تم النشر', 'تم إضافة العقار بنجاح، بانتظار المراجعة',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primary,
+          colorText: AppColors.white);
+      Get.back();
+    } catch (e) {
+      Get.snackbar('فشل النشر', 'تعذر إرسال العقار، حاول مرة أخرى.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFC62828),
+          colorText: AppColors.white);
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
   }
+
+  static const Map<String, String> _typeMap = {
+    'فيلا': 'villa', 'شقة': 'apartment', 'مكتب': 'office', 'دوبلكس': 'duplex',
+    'استوديو': 'studio', 'بنتهاوس': 'penthouse', 'تجاري': 'commercial', 'مزرعة': 'farm',
+  };
+
+  static const Map<String, String> _cityMap = {
+    'الرياض': 'Riyadh', 'جدة': 'Jeddah', 'الدمام': 'Dammam', 'الخبر': 'Khobar',
+    'مكة': 'Makkah', 'المدينة': 'Madinah', 'أبها': 'Abha', 'تبوك': 'Tabuk',
+  };
+
+  static const Map<String, String> _furnishingMap = {
+    'مفروش': 'furnished', 'غير مفروش': 'unfurnished', 'شبه مفروش': 'semi-furnished',
+  };
+
+  static const Map<String, String> _amenityMap = {
+    'إنترنت': 'wifi', 'نادي رياضي': 'gym', 'مسبح': 'pool',
+    'موقف': 'parking', 'أمن 24/7': 'security', 'مصعد': 'elevator',
+  };
 
   String get _selectedAmenitiesStr {
     if (_selectedAmenities.isEmpty) return 'لم يتم الاختيار';
@@ -143,17 +209,35 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   propertyDescription: _propertyDescription,
                   propertyType: _propertyType,
                   propertyCity: _propertyCity,
+                  furnishing: _furnishing,
+                  area: _area,
+                  beds: _beds,
+                  baths: _baths,
+                  guests: _guests,
+                  dailyPrice: _dailyPrice,
                   monthlyPrice: _monthlyPrice,
+                  yearlyPrice: _yearlyPrice,
                   onNameChanged: (v) => setState(() => _propertyName = v),
                   onDescriptionChanged: (v) => setState(() => _propertyDescription = v),
                   onTypeChanged: (v) => setState(() => _propertyType = v),
                   onCityChanged: (v) => setState(() => _propertyCity = v),
-                  onPriceChanged: (v) => setState(() => _monthlyPrice = v),
+                  onFurnishingChanged: (v) => setState(() => _furnishing = v),
+                  onAreaChanged: (v) => setState(() => _area = v),
+                  onBedsChanged: (v) => setState(() => _beds = v),
+                  onBathsChanged: (v) => setState(() => _baths = v),
+                  onGuestsChanged: (v) => setState(() => _guests = v),
+                  onDailyPriceChanged: (v) => setState(() => _dailyPrice = v),
+                  onMonthlyPriceChanged: (v) => setState(() => _monthlyPrice = v),
+                  onYearlyPriceChanged: (v) => setState(() => _yearlyPrice = v),
                 ),
                 _StepLocation(
                   step: 2, onNext: _next,
                   address: _address,
+                  buildingNumber: _buildingNumber,
+                  floor: _floor,
                   onAddressChanged: (v) => setState(() => _address = v),
+                  onBuildingChanged: (v) => setState(() => _buildingNumber = v),
+                  onFloorChanged: (v) => setState(() => _floor = v),
                 ),
                 _StepPhotos(
                   step: 3, onNext: _next,
@@ -205,11 +289,17 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   }),
                 ),
                 _StepReview(
-                  step: 6, onPublish: _publish,
+                  step: 6, onPublish: _publish, publishing: _publishing,
                   propertyName: _propertyName,
                   propertyType: _propertyType,
                   propertyCity: _propertyCity,
+                  furnishing: _furnishing,
+                  area: _area,
+                  beds: _beds,
+                  baths: _baths,
+                  dailyPrice: _dailyPrice,
                   monthlyPrice: _monthlyPrice,
+                  yearlyPrice: _yearlyPrice,
                   address: _address,
                   amenities: _selectedAmenitiesStr,
                 ),
@@ -226,14 +316,23 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 class _StepInfo extends StatelessWidget {
   final int step;
   final VoidCallback onNext;
-  final String propertyName, propertyDescription, propertyType, propertyCity, monthlyPrice;
-  final ValueChanged<String> onNameChanged, onDescriptionChanged, onTypeChanged, onCityChanged, onPriceChanged;
+  final String propertyName, propertyDescription, propertyType, propertyCity;
+  final String furnishing, area, beds, baths, guests;
+  final String dailyPrice, monthlyPrice, yearlyPrice;
+  final ValueChanged<String> onNameChanged, onDescriptionChanged, onTypeChanged, onCityChanged;
+  final ValueChanged<String> onFurnishingChanged, onAreaChanged, onBedsChanged, onBathsChanged, onGuestsChanged;
+  final ValueChanged<String> onDailyPriceChanged, onMonthlyPriceChanged, onYearlyPriceChanged;
   const _StepInfo({
     required this.step, required this.onNext,
     required this.propertyName, required this.propertyDescription,
-    required this.propertyType, required this.propertyCity, required this.monthlyPrice,
+    required this.propertyType, required this.propertyCity,
+    required this.furnishing, required this.area, required this.beds, required this.baths, required this.guests,
+    required this.dailyPrice, required this.monthlyPrice, required this.yearlyPrice,
     required this.onNameChanged, required this.onDescriptionChanged,
-    required this.onTypeChanged, required this.onCityChanged, required this.onPriceChanged,
+    required this.onTypeChanged, required this.onCityChanged,
+    required this.onFurnishingChanged, required this.onAreaChanged,
+    required this.onBedsChanged, required this.onBathsChanged, required this.onGuestsChanged,
+    required this.onDailyPriceChanged, required this.onMonthlyPriceChanged, required this.onYearlyPriceChanged,
   });
 
   @override
@@ -303,9 +402,60 @@ class _StepInfo extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                const _InputLabel(text: 'السعر الشهري (SAR)'),
+                const _InputLabel(text: 'حالة التأثيث'),
                 const SizedBox(height: 6),
-                _FormField(hint: '3,200', keyboardType: TextInputType.number, onChanged: onPriceChanged),
+                _DropdownField(
+                  value: furnishing,
+                  items: const ['مفروش', 'غير مفروش', 'شبه مفروش'],
+                  onChanged: onFurnishingChanged,
+                ),
+                const SizedBox(height: 16),
+                const _InputLabel(text: 'المساحة (م²)'),
+                const SizedBox(height: 6),
+                _FormField(hint: 'مثال: 180', keyboardType: TextInputType.number, onChanged: onAreaChanged),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(child: _CountField(label: 'غرف النوم', value: beds, onChanged: onBedsChanged)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _CountField(label: 'الحمامات', value: baths, onChanged: onBathsChanged)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _CountField(label: 'الضيوف', value: guests, onChanged: onGuestsChanged)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _InputLabel(text: 'الأسعار (SAR)'),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _InputLabel(text: 'يومي'),
+                        const SizedBox(height: 6),
+                        _FormField(hint: '450', keyboardType: TextInputType.number, onChanged: onDailyPriceChanged),
+                      ],
+                    )),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _InputLabel(text: 'شهري'),
+                        const SizedBox(height: 6),
+                        _FormField(hint: '3,200', keyboardType: TextInputType.number, onChanged: onMonthlyPriceChanged),
+                      ],
+                    )),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _InputLabel(text: 'سنوي'),
+                        const SizedBox(height: 6),
+                        _FormField(hint: '32,000', keyboardType: TextInputType.number, onChanged: onYearlyPriceChanged),
+                      ],
+                    )),
+                  ],
+                ),
               ],
             ),
           ),
@@ -322,11 +472,12 @@ class _StepInfo extends StatelessWidget {
 class _StepLocation extends StatelessWidget {
   final int step;
   final VoidCallback onNext;
-  final String address;
-  final ValueChanged<String> onAddressChanged;
+  final String address, buildingNumber, floor;
+  final ValueChanged<String> onAddressChanged, onBuildingChanged, onFloorChanged;
   const _StepLocation({
     required this.step, required this.onNext,
-    required this.address, required this.onAddressChanged,
+    required this.address, required this.buildingNumber, required this.floor,
+    required this.onAddressChanged, required this.onBuildingChanged, required this.onFloorChanged,
   });
 
   @override
@@ -384,6 +535,28 @@ class _StepLocation extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _FormField(hint: 'أدخل عنوان العقار التفصيلي...', onChanged: onAddressChanged),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _InputLabel(text: 'رقم المبنى'),
+                  const SizedBox(height: 6),
+                  _FormField(hint: '12', keyboardType: TextInputType.number, onChanged: onBuildingChanged),
+                ],
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _InputLabel(text: 'الطابق'),
+                  const SizedBox(height: 6),
+                  _FormField(hint: '3', keyboardType: TextInputType.number, onChanged: onFloorChanged),
+                ],
+              )),
+            ],
+          ),
           const SizedBox(height: 24),
           _NextButton(step: step, onPressed: onNext),
           const SizedBox(height: 30),
@@ -853,11 +1026,16 @@ class _StepAvailability extends StatelessWidget {
 class _StepReview extends StatelessWidget {
   final int step;
   final VoidCallback onPublish;
-  final String propertyName, propertyType, propertyCity, monthlyPrice, address, amenities;
+  final bool publishing;
+  final String propertyName, propertyType, propertyCity, furnishing;
+  final String area, beds, baths, dailyPrice, monthlyPrice, yearlyPrice;
+  final String address, amenities;
   const _StepReview({
-    required this.step, required this.onPublish,
+    required this.step, required this.onPublish, required this.publishing,
     required this.propertyName, required this.propertyType,
-    required this.propertyCity, required this.monthlyPrice,
+    required this.propertyCity, required this.furnishing,
+    required this.area, required this.beds, required this.baths,
+    required this.dailyPrice, required this.monthlyPrice, required this.yearlyPrice,
     required this.address, required this.amenities,
   });
 
@@ -896,7 +1074,13 @@ class _StepReview extends StatelessWidget {
                 const Divider(height: 20, color: AppColors.fieldBorder),
                 _ReviewRow(label: 'المدينة', value: propertyCity),
                 const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'السعر', value: monthlyPrice.isEmpty ? 'لم يتم الإدخال' : '$monthlyPrice ر.س / شهرياً'),
+                _ReviewRow(label: 'التأثيث', value: furnishing),
+                const Divider(height: 20, color: AppColors.fieldBorder),
+                _ReviewRow(label: 'المساحة', value: area.isEmpty ? 'لم يتم الإدخال' : '$area م²'),
+                const Divider(height: 20, color: AppColors.fieldBorder),
+                _ReviewRow(label: 'الغرف', value: '${beds.isEmpty ? '0' : beds} غرف / ${baths.isEmpty ? '0' : baths} حمام'),
+                const Divider(height: 20, color: AppColors.fieldBorder),
+                _ReviewRow(label: 'الأسعار', value: _pricesSummary()),
                 const Divider(height: 20, color: AppColors.fieldBorder),
                 _ReviewRow(label: 'الموقع', value: address.isEmpty ? 'لم يتم الإدخال' : address),
                 const Divider(height: 20, color: AppColors.fieldBorder),
@@ -905,11 +1089,20 @@ class _StepReview extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: onPublish),
+          _NextButton(step: step, onPressed: publishing ? null : onPublish, loading: publishing),
           const SizedBox(height: 30),
         ],
       ),
     );
+  }
+
+  String _pricesSummary() {
+    final parts = <String>[
+      if (dailyPrice.isNotEmpty) 'يومي: $dailyPrice',
+      if (monthlyPrice.isNotEmpty) 'شهري: $monthlyPrice',
+      if (yearlyPrice.isNotEmpty) 'سنوي: $yearlyPrice',
+    ];
+    return parts.isEmpty ? 'لم يتم الإدخال' : parts.join(' • ');
   }
 }
 
@@ -932,8 +1125,9 @@ class _ReviewRow extends StatelessWidget {
 
 class _NextButton extends StatelessWidget {
   final int step;
-  final VoidCallback onPressed;
-  const _NextButton({required this.step, required this.onPressed});
+  final VoidCallback? onPressed;
+  final bool loading;
+  const _NextButton({required this.step, this.onPressed, this.loading = false});
 
   String get _label {
     const labels = ['الموقع', 'الصور', 'المرافق', 'التقويم', 'المراجعة'];
@@ -947,24 +1141,85 @@ class _NextButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity, height: 52,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.white,
+          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+          disabledForegroundColor: AppColors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 4,
           shadowColor: AppColors.primary.withValues(alpha: 0.3),
         ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(_label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          ),
+          child: loading
+              ? const SizedBox(
+                  width: 24, height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.white),
+                )
+              : FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(_label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
       ),
     );
   }
 }
 
 // ───── Shared widgets ─────
+class _CountField extends StatelessWidget {
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _CountField({required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.darkText)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.fieldBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.fieldBorder),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Text(value.isEmpty ? '0' : value,
+                    style: const TextStyle(fontSize: 14, color: AppColors.darkText), textAlign: TextAlign.center),
+                ),
+              ),
+              Column(
+                children: [
+                  InkWell(
+                    onTap: () => onChanged(((int.tryParse(value) ?? 0) + 1).toString()),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(Icons.keyboard_arrow_up, size: 20, color: AppColors.primary),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => onChanged(((int.tryParse(value) ?? 0) - 1).clamp(0, 99).toString()),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(Icons.keyboard_arrow_down, size: 20, color: AppColors.primary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _InputLabel extends StatelessWidget {
   final String text;
   const _InputLabel({required this.text});

@@ -17,6 +17,17 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
   final _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctrl = Get.find<AppController>();
+      if (ctrl.ownerProperties.isEmpty) {
+        ctrl.fetchOwnerMyProperties();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -59,6 +70,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
       body: Obx(() {
         final all = ctrl.ownerProperties;
         final properties = _filtered(all.toList());
+        final isLoading = ctrl.ownerPropertiesLoading.value;
         return Column(
           children: [
             Padding(
@@ -105,7 +117,9 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
               ),
             ),
             Expanded(
-              child: properties.isEmpty
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                  : properties.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -145,8 +159,10 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
                             title: p.title,
                             location: p.location,
                             price: p.price,
+                            period: p.period,
                             status: p.badge1,
                             statusColor: statusColor,
+                            imageUrl: p.imageUrl,
                             rooms: p.bedrooms.toString(),
                             baths: p.bathrooms.toString(),
                             area: p.area.toStringAsFixed(0),
@@ -249,12 +265,14 @@ class _AddPropertyCard extends StatelessWidget {
 }
 
 class _PropertyCard extends StatelessWidget {
-  final String title, location, price, status, rooms, baths, area;
+  final String title, location, price, period, status, rooms, baths, area;
+  final String? imageUrl;
   final Color statusColor;
   final VoidCallback onTap;
   const _PropertyCard({
     required this.title, required this.location, required this.price,
-    required this.status, required this.statusColor,
+    required this.period, required this.status, required this.statusColor,
+    required this.imageUrl,
     required this.rooms, required this.baths, required this.area,
     required this.onTap,
   });
@@ -304,19 +322,21 @@ class _PropertyCard extends StatelessWidget {
                           const SizedBox(height: 2),
                           Row(
                             children: [
-                              Text(price, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+                              Flexible(
+                                child: Text(price, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkText), overflow: TextOverflow.ellipsis),
+                              ),
                               const SizedBox(width: 4),
-                              const Text('ر.س / شهرياً', style: TextStyle(fontSize: 11, color: AppColors.grey)),
+                              Text('/ ${_periodLabel(period)}', style: const TextStyle(fontSize: 11, color: AppColors.grey)),
                             ],
                           ),
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              _SpecItem(icon: Icons.bed, text: '$rooms غرف'),
+                              Expanded(child: _SpecItem(icon: Icons.bed, text: '$rooms غرف')),
                               const SizedBox(width: 12),
-                              _SpecItem(icon: Icons.bathroom, text: '$baths حمام'),
+                              Expanded(child: _SpecItem(icon: Icons.bathroom, text: '$baths حمام')),
                               const SizedBox(width: 12),
-                              _SpecItem(icon: Icons.square_foot, text: '$area م²'),
+                              Expanded(child: _SpecItem(icon: Icons.square_foot, text: '$area م²')),
                             ],
                           ),
                         ],
@@ -328,16 +348,14 @@ class _PropertyCard extends StatelessWidget {
               const SizedBox(width: 12),
               ClipRRect(
                 borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
-                child: Image.asset(
-                  'assets/image/building.jpg',
-                  width: 100, height: 120,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
-                    width: 100, height: 120,
-                    color: AppColors.darkBlue,
-                    child: const Icon(Icons.business, color: AppColors.white, size: 40),
-                  ),
-                ),
+                child: imageUrl != null && imageUrl!.isNotEmpty
+                    ? Image.network(
+                        imageUrl!,
+                        width: 100, height: 120,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _imagePlaceholder(),
+                      )
+                    : _imagePlaceholder(),
               ),
             ],
           ),
@@ -345,6 +363,25 @@ class _PropertyCard extends StatelessWidget {
       ),
     );
   }
+
+  String _periodLabel(String period) {
+    switch (period) {
+      case 'يومياً':
+      case 'daily':
+        return 'يومياً';
+      case 'سنوياً':
+      case 'yearly':
+        return 'سنوياً';
+      default:
+        return 'شهرياً';
+    }
+  }
+
+  Widget _imagePlaceholder() => Container(
+        width: 100, height: 120,
+        color: AppColors.darkBlue,
+        child: const Icon(Icons.business, color: AppColors.white, size: 40),
+      );
 }
 
 class _SpecItem extends StatelessWidget {
@@ -355,11 +392,12 @@ class _SpecItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 14, color: AppColors.grey),
         const SizedBox(width: 3),
-        Text(text, style: const TextStyle(fontSize: 11, color: AppColors.grey)),
+        Flexible(
+          child: Text(text, style: const TextStyle(fontSize: 11, color: AppColors.grey), overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }

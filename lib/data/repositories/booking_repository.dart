@@ -61,4 +61,45 @@ class BookingRepository {
     }
     return CancelBookingResult.fromJson(data);
   }
+
+  // ===== Owner Bookings =====
+
+  /// حجوزات المالك من `/owner/bookings` — يتطلب تسجيل دخول المالك.
+  /// [status] قيم مثل `all`, `pending`, `confirmed`, `cancelled`.
+  /// [propertyId]: `all` لكل العقارات أو رقم عقار محدد.
+  Future<BookingPage> fetchOwnerBookings({
+    String status = 'all',
+    String propertyId = 'all',
+    int page = 1,
+    int limit = 50,
+  }) async {
+    final res = await _api.get(
+      AppConfig.ownerBookings,
+      query: {
+        'limit': limit,
+        'page': page,
+        'status': status,
+        'propertyId': propertyId,
+      },
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('استجابة غير صالحة');
+    }
+    return BookingPage.fromJson(data);
+  }
+
+  /// تفاصيل حجز من منظور المالك `/owner/bookings/{id}`.
+  Future<Booking> fetchOwnerBookingDetail({required int id}) async {
+    final res = await _api.get(AppConfig.ownerBookingDetail(id));
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('استجابة غير صالحة');
+    }
+    final booking = data['booking'];
+    if (booking is! Map) {
+      throw const FormatException('استجابة غير صالحة');
+    }
+    return Booking.fromJson(Map<String, dynamic>.from(booking));
+  }
 }

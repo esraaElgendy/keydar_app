@@ -35,22 +35,24 @@ class _LoginScreenState extends State<LoginScreen> {
     final type = Get.arguments as String? ?? AccountType.searcher;
     _auth.setAccountType(type);
 
-    if (type == AccountType.owner) {
-      // الـ owner لم يربط بعد — ندخل مباشرة لشاشة لوحة التحكم.
-      Get.offNamed(AppRoutes.ownerDashboard);
-      return;
-    }
-
     if (_emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
       Get.snackbar('تنبيه', 'يرجى إدخال البريد وكلمة المرور');
       return;
     }
 
-    final success = await _auth.login(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
+    bool success;
+    if (type == AccountType.owner) {
+      success = await _auth.ownerLogin(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    } else {
+      success = await _auth.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    }
 
     if (!success) {
       Get.snackbar(
@@ -60,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    Get.offNamed(AppRoutes.home);
+    Get.offNamed(type == AccountType.owner ? AppRoutes.ownerDashboard : AppRoutes.home);
   }
 
   @override

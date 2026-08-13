@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/auth_controller.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/routes/app_routes.dart';
 import '../../models/booking_request.dart';
 import '../booking_requests/booking_request_detail_sheet.dart';
 
-class OwnerDashboardScreen extends StatelessWidget {
+class OwnerDashboardScreen extends StatefulWidget {
   const OwnerDashboardScreen({super.key});
+
+  @override
+  State<OwnerDashboardScreen> createState() => _OwnerDashboardScreenState();
+}
+
+class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    AuthController.instance.fetchOwnerStats();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +48,9 @@ class OwnerDashboardScreen extends StatelessWidget {
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
+        child: Obx(() {
+          final s = AuthController.instance.ownerStats.value;
+          return Column(
           children: [
             const SizedBox(height: 20),
             Row(
@@ -56,8 +70,8 @@ class OwnerDashboardScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: _StatCard(
-                    label: 'الوحدات المتاحة',
-                    value: '12',
+                    label: 'العقارات المتاحة',
+                    value: '${s?.activeProperties ?? 0}',
                     icon: Icons.home_work,
                     color: const Color(0xFFF57C00),
                   ),
@@ -66,7 +80,7 @@ class OwnerDashboardScreen extends StatelessWidget {
                 Expanded(
                   child: _StatCard(
                     label: 'إجمالي العقارات',
-                    value: '18',
+                    value: '${s?.totalProperties ?? 0}',
                     icon: Icons.business,
                     color: const Color(0xFF0D47C9),
                   ),
@@ -78,8 +92,8 @@ class OwnerDashboardScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: _StatCard(
-                    label: 'طلبات جديدة',
-                    value: '5',
+                    label: 'حجوزات قيد المراجعة',
+                    value: '${s?.pendingBookings ?? 0}',
                     icon: Icons.fiber_new,
                     color: const Color(0xFFE65100),
                   ),
@@ -87,15 +101,37 @@ class OwnerDashboardScreen extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
-                    label: 'المؤجرة',
-                    value: '6',
-                    icon: Icons.check_circle,
-                    color: const Color(0xFF2E7D32),
+                    label: 'إجمالي الحجوزات',
+                    value: '${s?.totalBookings ?? 0}',
+                    icon: Icons.calendar_today,
+                    color: const Color(0xFF0D47C9),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'مشاهدات العقارات',
+                    value: '${s?.totalViews ?? 0}',
+                    icon: Icons.visibility_outlined,
+                    color: const Color(0xFF7B1FA2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(
+                    label: 'التقييم',
+                    value: _rating(s?.averageRating ?? 0),
+                    icon: Icons.star,
+                    color: const Color(0xFFF9A825),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -117,14 +153,17 @@ class OwnerDashboardScreen extends StatelessWidget {
                   const SizedBox(height: 14),
                   const Text('إجمالي الدخل', style: TextStyle(fontSize: 12, color: Color(0xFFB0D4FF))),
                   const SizedBox(height: 6),
-                  const Text(
-                    '125,500 ر.س',
-                    style: TextStyle(
+                  Text(
+                    '${_money(s?.totalRevenue ?? 0)} ر.س',
+                    style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text('دخل هذا الشهر: ${_money(s?.monthlyRevenue ?? 0)} ر.س',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFFB0D4FF))),
                 ],
               ),
             ),
@@ -160,7 +199,8 @@ class OwnerDashboardScreen extends StatelessWidget {
             )),
             const SizedBox(height: 100),
           ],
-        ),
+          );
+        }),
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -221,6 +261,27 @@ class _StatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// تنسيق المبلغ: أعداد صحيحة بدون كسور، وفواصل الآلاف.
+String _money(double v) {
+  if (v == v.roundToDouble()) {
+    final s = v.toInt().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      buf.write(s[i]);
+      final remaining = s.length - i - 1;
+      if (remaining > 0 && remaining % 3 == 0) buf.write(',');
+    }
+    return buf.toString();
+  }
+  return v.toStringAsFixed(2);
+}
+
+/// عرض التقييم: رقم واحد عشري أو "—" إذا لم يوجد تقييم بعد.
+String _rating(double r) {
+  if (r <= 0) return '—';
+  return r == r.roundToDouble() ? r.toInt().toString() : r.toStringAsFixed(1);
 }
 
 class _BookingRequestPreview extends StatelessWidget {

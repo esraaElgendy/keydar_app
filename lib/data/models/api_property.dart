@@ -10,7 +10,9 @@ class ApiProperty {
   final String? tag;
   final String? propertyType;
   final String? status;
+  final String? approvalStatus;
   final String? furnishing;
+  final String? city;
   final String title;
   final String? location;
   final double? latitude;
@@ -33,7 +35,9 @@ class ApiProperty {
     this.tag,
     this.propertyType,
     this.status,
+    this.approvalStatus,
     this.furnishing,
+    this.city,
     required this.title,
     this.location,
     this.latitude,
@@ -52,9 +56,17 @@ class ApiProperty {
 
   factory ApiProperty.fromJson(Map<String, dynamic> json) {
     final imagesRaw = json['images'];
-    final images = imagesRaw is List
-        ? imagesRaw.whereType<String>().toList()
-        : <String>[];
+    final images = <String>[];
+    if (imagesRaw is List) {
+      for (final e in imagesRaw) {
+        if (e is String && e.trim().isNotEmpty) {
+          images.add(e);
+        } else if (e is Map) {
+          final src = e['src'];
+          if (src is String && src.trim().isNotEmpty) images.add(src);
+        }
+      }
+    }
 
     final pricesRaw = json['prices'];
     final Map<String, num> prices = {};
@@ -73,7 +85,9 @@ class ApiProperty {
       tag: json['tag'] as String?,
       propertyType: json['propertyType'] as String?,
       status: json['status'] as String?,
+      approvalStatus: json['approvalStatus'] as String?,
       furnishing: json['furnishing'] as String?,
+      city: json['city'] as String?,
       title: (json['title'] as String?) ?? '',
       location: json['location'] as String?,
       latitude: _toNum(json['latitude'])?.toDouble(),
@@ -142,17 +156,30 @@ class ApiProperty {
       area: area.toDouble(),
       image: '',
       description: description ?? furnishing ?? '',
-      badge1: status ?? 'متاح',
+      badge1: statusLabel,
       isFavorite: isFavorite,
       imageUrl: firstImage,
       gallery: images.map(AppConfig.assetUrl).where((u) => u.isNotEmpty).toList(),
       status: status,
       furnishing: furnishing,
+      city: city,
       guests: guests,
       latitude: latitude,
       longitude: longitude,
       prices: prices,
     );
+  }
+
+  /// تحويل الحالة القادمة من السيرفر إلى تسمية الواجهة.
+  /// `approvalStatus: pending` → "قيد المراجعة"، و `status: متاح` → "متاحة".
+  String get statusLabel {
+    final approval = (approvalStatus ?? '').toLowerCase();
+    if (approval == 'pending') return 'قيد المراجعة';
+    final s = (status ?? '').trim();
+    if (s == 'متاح' || s == 'available') return 'متاحة';
+    if (s == 'مؤجرة' || s == 'rented') return 'مؤجرة';
+    if (s.isEmpty) return 'متاحة';
+    return s;
   }
 
   /// عندما تكون المواقع على هيئة إحداثيات (`lat:/lng:`) نعرض نصاً مقروءاً.
@@ -201,6 +228,7 @@ class ApiPropertyDetail {
   final String? floor;
   final int kitchens;
   final String? address;
+  final String? createdAt;
   final List<String> kitchenAmenities;
   final List<String> bathroomAmenities;
   final List<String> primaryAmenities;
@@ -215,6 +243,7 @@ class ApiPropertyDetail {
     this.floor,
     this.kitchens = 0,
     this.address,
+    this.createdAt,
     this.kitchenAmenities = const [],
     this.bathroomAmenities = const [],
     this.primaryAmenities = const [],
@@ -223,7 +252,7 @@ class ApiPropertyDetail {
   });
 
   factory ApiPropertyDetail.fromJson(Map<String, dynamic> json) {
-    final specs = json['specs'];
+    final specs = json['specs'] ?? json['specifications'];
 
     String? floor;
     int kitchens = 0;
@@ -245,6 +274,12 @@ class ApiPropertyDetail {
       specFeatures.addAll(_stringList(specs['property_features']));
     }
 
+    if (kitchenAmenities.isEmpty) kitchenAmenities.addAll(_stringList(json['kitchenAmenities']));
+    if (bathroomAmenities.isEmpty) bathroomAmenities.addAll(_stringList(json['bathroomAmenities']));
+    if (primaryAmenities.isEmpty) primaryAmenities.addAll(_stringList(json['primaryAmenities']));
+    if (secondaryAmenities.isEmpty) secondaryAmenities.addAll(_stringList(json['secondaryAmenities']));
+    if (specFeatures.isEmpty) specFeatures.addAll(_stringList(json['propertyFeatures']));
+
     return ApiPropertyDetail(
       base: ApiProperty.fromJson(json),
       description: json['description'] as String?,
@@ -253,6 +288,7 @@ class ApiPropertyDetail {
       floor: floor,
       kitchens: kitchens,
       address: address,
+      createdAt: json['createdAt'] as String?,
       kitchenAmenities: kitchenAmenities,
       bathroomAmenities: bathroomAmenities,
       primaryAmenities: primaryAmenities,

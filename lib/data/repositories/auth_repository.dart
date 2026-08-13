@@ -2,6 +2,8 @@ import '../../core/constants/app_config.dart';
 import '../models/auth_response.dart';
 import '../models/customer.dart';
 import '../models/customer_statistics.dart';
+import '../models/owner_auth_response.dart';
+import '../models/owner_dashboard_stats.dart';
 import '../services/api_client.dart';
 
 /// طبقة الوصول للـ Auth API.
@@ -50,6 +52,40 @@ class AuthRepository {
   /// تسجيل خروج المستأجر.
   Future<void> customerLogout() async {
     await _api.post(AppConfig.customerLogout);
+  }
+
+  /// تسجيل دخول المالك (Owner).
+  Future<OwnerAuthResponse> ownerLogin({
+    required String email,
+    required String password,
+  }) async {
+    final res = await _api.post(
+      AppConfig.ownerLogin,
+      body: {
+        'email': email,
+        'password': password,
+      },
+    );
+    return OwnerAuthResponse.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// تسجيل خروج المالك (Owner).
+  Future<void> ownerLogout() async {
+    await _api.post(AppConfig.ownerLogout);
+  }
+
+  /// جلب إحصائيات لوحة تحكم المالك — يتطلب تسجيل دخول المالك.
+  Future<OwnerDashboardStats> fetchOwnerStats() async {
+    final res = await _api.get(AppConfig.ownerDashboardStats);
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('استجابة غير صالحة');
+    }
+    final stats = data['stats'];
+    if (stats is! Map) {
+      throw const FormatException('استجابة غير صالحة');
+    }
+    return OwnerDashboardStats.fromJson(Map<String, dynamic>.from(stats));
   }
 
   /// جلب ملف المستأجر (Customer) من الـ API — يتطلب تسجيل دخول.

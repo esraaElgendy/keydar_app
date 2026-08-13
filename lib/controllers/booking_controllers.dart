@@ -115,6 +115,88 @@ class MyBookingsController extends GetxController {
   }
 }
 
+/// حجوزات المالك — يسحب من `GET /owner/bookings` مع الفلترة بالحالة.
+class OwnerBookingsController extends GetxController {
+  final BookingRepository _repository = BookingRepository();
+
+  final RxList<Booking> bookings = RxList<Booking>();
+  final RxBool loading = false.obs;
+  final RxnString errorMessage = RxnString();
+  final RxString status = RxString('all');
+
+  int _page = 1;
+  int _pages = 1;
+  bool _loaded = false;
+
+  static const List<String> statusTabs = [
+    'all', 'pending', 'confirmed', 'completed', 'cancelled',
+  ];
+
+  bool get hasMore => _loaded && _page < _pages;
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) loading.value = true;
+    errorMessage.value = null;
+    try {
+      final result = await _repository.fetchOwnerBookings(status: status.value);
+      bookings.assignAll(result.bookings);
+      _page = result.page;
+      _pages = result.pages;
+      _loaded = true;
+      if (bookings.isEmpty) {
+        errorMessage.value = 'لا توجد حجوزات';
+      }
+    } catch (e) {
+      errorMessage.value = 'تعذر تحميل الحجوزات، تحقق من اتصالك بالإنترنت';
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<void> selectStatus(String s) async {
+    if (status.value == s) return;
+    status.value = s;
+    _page = 1;
+    _pages = 1;
+    _loaded = false;
+    await load();
+  }
+
+  Future<void> loadMore() async {
+    if (!hasMore) return;
+    try {
+      final result = await _repository.fetchOwnerBookings(
+        status: status.value,
+        page: _page + 1,
+      );
+      bookings.addAll(result.bookings);
+      _page = result.page;
+      _pages = result.pages;
+    } catch (_) {}
+  }
+}
+
+/// تفاصيل حجز من منظور المالك — `GET /owner/bookings/{id}`.
+class OwnerBookingDetailController extends GetxController {
+  final BookingRepository _repository = BookingRepository();
+
+  final Rxn<Booking> booking = Rxn<Booking>();
+  final RxBool loading = false.obs;
+  final RxnString errorMessage = RxnString();
+
+  Future<void> load({required int id}) async {
+    loading.value = true;
+    errorMessage.value = null;
+    try {
+      booking.value = await _repository.fetchOwnerBookingDetail(id: id);
+    } catch (e) {
+      errorMessage.value = 'تعذر تحميل تفاصيل الحجز';
+    } finally {
+      loading.value = false;
+    }
+  }
+}
+
 /// تفاصيل حجز واحد + الإلغاء.
 class BookingDetailController extends GetxController {
   final BookingRepository _repository = BookingRepository();

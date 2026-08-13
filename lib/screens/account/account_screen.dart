@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/auth_controller.dart';
+import '../../core/constants/account_type.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/routes/app_routes.dart';
 import '../../models/tenant.dart';
 
-class AccountScreen extends StatelessWidget {
+class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  @override
+  void initState() {
+    super.initState();
+    AuthController.instance.fetchOwnerStats();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,43 +99,55 @@ class _HeroCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
-      child: Column(
-        children: [
-          Container(
-            width: 88, height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.2),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 3),
+      child: Obx(() {
+        final owner = AuthController.instance.owner.value;
+        final stats = AuthController.instance.ownerStats.value;
+        final name = owner?.fullName ?? 'صاحب العقار';
+        final email = owner?.email ?? '';
+        final phone = owner?.phone ?? '';
+        final verified = owner?.verified ?? false;
+        return Column(
+          children: [
+            Container(
+              width: 88, height: 88,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.2),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 3),
+              ),
+              child: const Icon(Icons.person, size: 44, color: Colors.white),
             ),
-            child: const Icon(Icons.person, size: 44, color: Colors.white),
-          ),
-          const SizedBox(height: 14),
-          const Text('محمد أحمد', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Verified Owner', style: TextStyle(fontSize: 13, color: Colors.white70)),
-              const SizedBox(width: 6),
-              Icon(Icons.verified, size: 16, color: Colors.amber.shade300),
+            const SizedBox(height: 14),
+            Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(verified ? 'Verified Owner' : 'Owner', style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                if (verified) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.verified, size: 16, color: Colors.amber.shade300),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(email, style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.75))),
+            if (phone.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(phone, style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.75))),
             ],
-          ),
-          const SizedBox(height: 6),
-          Text('owner@example.com', style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.75))),
-          const SizedBox(height: 2),
-          Text('+966 50 123 4567', style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.75))),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _HeroStat(value: '18', label: 'عقار'),
-              Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.2)),
-              _HeroStat(value: '26', label: 'وحدة'),
-            ],
-          ),
-        ],
-      ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _HeroStat(value: '${stats?.totalProperties ?? 0}', label: 'عقار'),
+                Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.2)),
+                _HeroStat(value: '${stats?.totalBookings ?? 0}', label: 'حجز'),
+              ],
+            ),
+          ],
+        );
+      }),
     );
   }
 }
@@ -155,41 +180,94 @@ class _StatisticsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('إحصائياتي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A24))),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: const Color(0xFF0D47C9).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.bar_chart_rounded, size: 16, color: Color(0xFF0D47C9)),
+      child: Obx(() {
+        final s = AuthController.instance.ownerStats.value;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('إحصائياتي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A24))),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: const Color(0xFF0D47C9).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.bar_chart_rounded, size: 16, color: Color(0xFF0D47C9)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _StatBox(label: 'الحجوزات', value: '${s?.totalBookings ?? 0}', icon: Icons.calendar_today, color: const Color(0xFF0D47C9)),
+                const SizedBox(width: 8),
+                _StatBox(label: 'قيد المراجعة', value: '${s?.pendingBookings ?? 0}', icon: Icons.hourglass_top, color: const Color(0xFFE65100)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _StatBox(label: 'العقارات المتاحة', value: '${s?.activeProperties ?? 0}', icon: Icons.home_work, color: const Color(0xFFF57C00)),
+                const SizedBox(width: 10),
+                _StatBox(label: 'إجمالي العقارات', value: '${s?.totalProperties ?? 0}', icon: Icons.business, color: const Color(0xFF0D47C9)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _StatBox(label: 'مشاهدات', value: '${s?.totalViews ?? 0}', icon: Icons.visibility_outlined, color: const Color(0xFF7B1FA2)),
+                const SizedBox(width: 10),
+                _StatBox(label: 'التقييم', value: _rating(s?.averageRating ?? 0), icon: Icons.star, color: const Color(0xFFF9A825)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D47C9).withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(14),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _StatBox(label: 'الحجوزات', value: '24', icon: Icons.calendar_today, color: const Color(0xFF0D47C9)),
-              const SizedBox(width: 8),
-              _StatBox(label: 'الإيرادات', value: '48k', icon: Icons.trending_up, color: const Color(0xFF2E7D32)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _StatBox(label: 'مؤجرة', value: '12', icon: Icons.check_circle, color: const Color(0xFF2E7D32)),
-              const SizedBox(width: 10),
-              _StatBox(label: 'متاحة', value: '14', icon: Icons.home_work, color: const Color(0xFFF57C00)),
-            ],
-          ),
-        ],
-      ),
+              child: Row(
+                children: [
+                  const Icon(Icons.trending_up, color: Color(0xFF0D47C9), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('إجمالي الدخل', style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
+                        const SizedBox(height: 2),
+                        Text('${_money(s?.totalRevenue ?? 0)} ر.س', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0D47C9))),
+                      ],
+                    ),
+                  ),
+                  Text('${_money(s?.monthlyRevenue ?? 0)} ر.س/شهر',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF616161))),
+                ],
+              ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }
+
+String _money(double v) {
+  if (v == v.roundToDouble()) {
+    final s = v.toInt().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      buf.write(s[i]);
+      final remaining = s.length - i - 1;
+      if (remaining > 0 && remaining % 3 == 0) buf.write(',');
+    }
+    return buf.toString();
+  }
+  return v.toStringAsFixed(2);
+}
+
+String _rating(double r) => r <= 0 ? '—' : (r == r.roundToDouble() ? r.toInt().toString() : r.toStringAsFixed(1));
 
 class _StatBox extends StatelessWidget {
   final String label, value;
@@ -455,7 +533,10 @@ class _LogoutButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: () async {
+        await AuthController.instance.logout();
+        Get.offAllNamed(AppRoutes.login, arguments: AccountType.owner);
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),

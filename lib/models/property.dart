@@ -22,6 +22,7 @@ class Property {
   final List<String> gallery;
   final String? status;
   final String? furnishing;
+  final String? city;
   final int guests;
   final double? latitude;
   final double? longitude;
@@ -58,6 +59,7 @@ class Property {
     this.gallery = const [],
     this.status,
     this.furnishing,
+    this.city,
     this.guests = 0,
     this.latitude,
     this.longitude,
@@ -94,6 +96,7 @@ class Property {
         'gallery': gallery,
         'status': status,
         'furnishing': furnishing,
+        'city': city,
         'guests': guests,
         'latitude': latitude,
         'longitude': longitude,
@@ -129,6 +132,7 @@ class Property {
         gallery: (json['gallery'] as List?)?.cast<String>() ?? const [],
         status: json['status'] as String?,
         furnishing: json['furnishing'] as String?,
+        city: json['city'] as String?,
         guests: (json['guests'] as num?)?.toInt() ?? 0,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),

@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/app_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/property_detail_controller.dart';
+import '../../core/constants/amenity_labels.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/routes/app_routes.dart';
 import '../../data/models/review.dart';
@@ -392,7 +393,7 @@ class _AmenitiesTab extends StatelessWidget {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8, runSpacing: 8,
-              children: section.$2.map((a) => _AmenityChip(label: a)).toList(),
+              children: section.$2.map((a) => _AmenityChip(label: AmenityLabels.translate(a))).toList(),
             ),
             const SizedBox(height: 20),
           ],

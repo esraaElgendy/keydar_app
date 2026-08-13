@@ -27,15 +27,34 @@ class AppController extends GetxController {
   final RxList<Property> allProperties = RxList<Property>();
   final RxBool allLoading = false.obs;
   final RxnString allError = RxnString();
-  final RxList<Property> ownerProperties = RxList<Property>([
-    Property(title: 'شقة فاخرة في الرياض', type: 'شقة', location: 'الرياض، العليا', price: '3,200', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 4, bathrooms: 2, area: 120, image: 'assets/image/building.jpg', description: 'شقة فاخرة في موقع مميز', badge1: 'متاحة'),
-    Property(title: 'فيلا مودرن في جدة', type: 'فيلا', location: 'جدة، الشاطئ', price: '5,000', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 5, bathrooms: 3, area: 250, image: 'assets/image/building.jpg', description: 'فيلا عصرية بإطلالة رائعة', badge1: 'متاحة'),
-    Property(title: 'شقة صغيرة في الدمام', type: 'شقة', location: 'الدمام، الحمراء', price: '2,200', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 3, bathrooms: 2, area: 100, image: 'assets/image/building.jpg', description: 'شقة مريحة', badge1: 'متاحة'),
-    Property(title: 'شقة مفروشة في الخبر', type: 'شقة', location: 'الخبر، العقربية', price: '2,800', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 2, bathrooms: 2, area: 90, image: 'assets/image/building.jpg', description: 'شقة مفروشة بالكامل', badge1: 'مؤجرة'),
-    Property(title: 'استوديو في الرياض', type: 'استوديو', location: 'الرياض، حي الملقا', price: '1,500', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 1, bathrooms: 1, area: 45, image: 'assets/image/building.jpg', description: 'استوديو حديث', badge1: 'متاحة'),
-    Property(title: 'دوبلكس في جدة', type: 'دوبلكس', location: 'جدة، أبحر الشمالية', price: '6,500', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 6, bathrooms: 4, area: 300, image: 'assets/image/building.jpg', description: 'دوبلكس فاخر', badge1: 'متاحة'),
-    Property(title: 'شقة تجارية في الرياض', type: 'مكتب', location: 'الرياض، حي المربع', price: '4,000', period: 'شهري', rating: 4.5, reviews: 0, bedrooms: 3, bathrooms: 2, area: 150, image: 'assets/image/building.jpg', description: 'مساحة تجارية', badge1: 'قيد المراجعة'),
-  ]);
+
+  /// عقارات المالك (عقاراتي) — تُملأ من السيرفر بعد تسجيل دخول المالك.
+  final RxList<Property> ownerProperties = RxList<Property>();
+  final RxBool ownerPropertiesLoading = false.obs;
+
+  /// جلب عقارات المالك من السيرفر (يتطلب تسجيل دخول المالك).
+  Future<void> fetchOwnerMyProperties({bool silent = false}) async {
+    if (!AuthController.instance.isOwnerLoggedIn) return;
+    if (!silent) ownerPropertiesLoading.value = true;
+    try {
+      final list = await _propertyRepo.fetchOwnerMyProperties();
+      ownerProperties.assignAll(list);
+    } catch (_) {
+      // فشل التحميل — يبقى السابق أو فارغاً.
+    } finally {
+      ownerPropertiesLoading.value = false;
+    }
+  }
+
+  /// استبدال عقار في قائمة عقارات المالك بعد تعديله (يُحدِّث الواجهة فوراً).
+  void replaceOwnerProperty(Property updated) {
+    final index = ownerProperties.indexWhere((p) => p.id == updated.id);
+    if (index >= 0) {
+      ownerProperties[index] = updated;
+    } else {
+      ownerProperties.insert(0, updated);
+    }
+  }
   final RxString searchQuery = RxString('');
   final RxInt selectedCategoryIndex = 0.obs;
 

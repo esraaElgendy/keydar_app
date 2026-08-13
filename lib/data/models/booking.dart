@@ -15,6 +15,15 @@ class Booking {
   final num totalPrice;
   final DateTime? createdAt;
 
+  /// بيانات المستأجر (تظهر في حجوزات المالك).
+  final int? customerId;
+  final String? customerName;
+  final String? customerEmail;
+  final String? customerPhone;
+
+  /// ملاحظات المستأجر على الحجز.
+  final String? notes;
+
   const Booking({
     required this.id,
     required this.bookingNumber,
@@ -30,10 +39,16 @@ class Booking {
     this.paymentStatus = 'pending',
     this.totalPrice = 0,
     this.createdAt,
+    this.customerId,
+    this.customerName,
+    this.customerEmail,
+    this.customerPhone,
+    this.notes,
   });
 
   factory Booking.fromJson(Map<String, dynamic> json) {
     final prop = json['property'];
+    final customer = json['customer'];
     return Booking(
       id: (json['id'] as num?)?.toInt() ?? 0,
       bookingNumber: (json['bookingNumber'] as String?) ?? '#BK',
@@ -49,6 +64,11 @@ class Booking {
       paymentStatus: (json['paymentStatus'] as String?) ?? 'pending',
       totalPrice: (json['totalPrice'] as num?) ?? 0,
       createdAt: _tryParseDateTime(json['createdAt']),
+      customerId: customer is Map ? (customer['id'] as num?)?.toInt() : null,
+      customerName: customer is Map ? (customer['name'] as String?) ?? '' : '',
+      customerEmail: customer is Map ? (customer['email'] as String?) ?? '' : '',
+      customerPhone: customer is Map ? (customer['phone'] as String?) ?? '' : '',
+      notes: json['notes'] as String?,
     );
   }
 
@@ -114,6 +134,11 @@ class Booking {
     String? paymentStatus,
     num? totalPrice,
     DateTime? createdAt,
+    int? customerId,
+    String? customerName,
+    String? customerEmail,
+    String? customerPhone,
+    String? notes,
   }) =>
       Booking(
         id: id ?? this.id,
@@ -130,6 +155,11 @@ class Booking {
         paymentStatus: paymentStatus ?? this.paymentStatus,
         totalPrice: totalPrice ?? this.totalPrice,
         createdAt: createdAt ?? this.createdAt,
+        customerId: customerId ?? this.customerId,
+        customerName: customerName ?? this.customerName,
+        customerEmail: customerEmail ?? this.customerEmail,
+        customerPhone: customerPhone ?? this.customerPhone,
+        notes: notes ?? this.notes,
       );
 
   static String _label(String value, Map<String, String> map) {

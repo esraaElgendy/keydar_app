@@ -26,6 +26,7 @@ class AppConfig {
 
   // ===== Auth - Owner =====
   static const String ownerLogin = '/auth/owner-login';
+  static const String ownerLogout = '/auth/owner-logout';
 
   // ===== Properties =====
   static const String latestProperties = '/properties/latest';
@@ -41,6 +42,21 @@ class AppConfig {
   /// تمييز تقييم كمفيد (POST) — يتطلب تسجيل دخول.
   static String propertyReviewHelpful(int id, int reviewId) =>
       '/properties/$id/reviews/$reviewId/helpful';
+
+  // ===== Owner =====
+  static const String ownerDashboardStats = '/owner/dashboard/stats';
+
+  /// إضافة عقار جديد بواسطة المالك (POST) — يتطلب تسجيل دخول المالك.
+  static const String ownerProperties = '/owner/properties';
+
+  /// قائمة عقارات المالك (GET) — يتطلب تسجيل دخول المالك.
+  static const String ownerMyProperties = '/owner/properties';
+
+  /// تفاصيل/تعديل عقار مالك (GET) أو (PUT) — يتطلب تسجيل دخول المالك.
+  static String ownerPropertyDetail(int id) => '/owner/properties/$id';
+
+  /// تغيير حالة عقار المالك (PUT body: `{"status": "available"}`).
+  static String ownerPropertyStatus(int id) => '/owner/properties/$id/status';
 
   // ===== Customer =====
   static const String customerProfile = '/customers/profile';
@@ -65,4 +81,10 @@ class AppConfig {
 
   /// إلغاء حجز واحد.
   static String cancelBooking(int id) => '/bookings/$id/cancel';
+
+  // ===== Owner Bookings =====
+  static const String ownerBookings = '/owner/bookings';
+
+  /// تفاصيل حجز من منظور المالك (يعرض بيانات المستأجر).
+  static String ownerBookingDetail(int id) => '/owner/bookings/$id';
 }

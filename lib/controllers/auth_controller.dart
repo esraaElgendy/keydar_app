@@ -4,6 +4,8 @@ import '../core/constants/account_type.dart';
 import '../data/models/auth_response.dart';
 import '../data/models/customer.dart';
 import '../data/models/customer_statistics.dart';
+import '../data/models/owner.dart';
+import '../data/models/owner_dashboard_stats.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/services/api_client.dart';
 import '../data/services/api_exception.dart';
@@ -22,11 +24,16 @@ class AuthController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxnString errorMessage = RxnString();
   final Rxn<Customer> customer = Rxn<Customer>();
+  final Rxn<Owner> owner = Rxn<Owner>();
   final Rxn<CustomerStatistics> statistics = Rxn<CustomerStatistics>();
+  final Rxn<OwnerDashboardStats> ownerStats = Rxn<OwnerDashboardStats>();
   final RxString accountType = RxString(AccountType.searcher);
 
-  /// هل يوجد مستخدم مسجّل دخوله حالياً؟
+  /// هل يوجد مستخدم مسجّل دخوله حالياً؟ (مستأجر)
   bool get isLoggedIn => customer.value != null;
+
+  /// هل يوجد مالك مسجّل دخوله حالياً؟
+  bool get isOwnerLoggedIn => owner.value != null;
 
   // ---- تحميل الجلسة عند بدء التطبيق ----
   @override
@@ -39,11 +46,26 @@ class AuthController extends GetxController {
     final token = await TokenStorage.getToken();
     final data = await TokenStorage.getCustomer();
     final savedType = await TokenStorage.getAccountType();
+    final ownerToken = await TokenStorage.getOwnerToken();
+    final ownerData = await TokenStorage.getOwner();
 
     if (savedType != null) {
       accountType.value = savedType;
       AccountType.set(savedType);
     }
+
+    // أولوية جلسة المالك إن وُجدت (لا تتداخل مع جلسة المستأجر).
+    if (ownerToken != null && ownerToken.isNotEmpty) {
+      ApiClient.instance.setAuthToken(ownerToken);
+      if (ownerData != null) {
+        owner.value = Owner.fromJson(ownerData);
+      }
+      if (Get.isRegistered<AppController>()) {
+        AppController.instance.fetchOwnerMyProperties();
+      }
+      return;
+    }
+
     if (token != null && token.isNotEmpty) {
       ApiClient.instance.setAuthToken(token);
       if (data != null) {
@@ -76,6 +98,17 @@ class AuthController extends GetxController {
       statistics.value = await _repository.fetchStatistics();
     } catch (_) {
       // صامت — نعرض صفر إذا تعذر الجلب.
+    }
+  }
+
+  /// جلب إحصائيات لوحة تحكم المالك وتحديث الحالة — صامت عند الخطأ.
+  Future<void> fetchOwnerStats() async {
+    final token = await TokenStorage.getOwnerToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      ownerStats.value = await _repository.fetchOwnerStats();
+    } catch (_) {
+      // صامت — نعرض آخر بيانات متاحة أو صفر.
     }
   }
 
@@ -139,6 +172,45 @@ class AuthController extends GetxController {
     );
   }
 
+  /// تسجيل دخول المالك (Owner).
+  /// يرجع `true` عند النجاح ويحفظ التوكن وبيانات المالك محلياً.
+  Future<bool> ownerLogin({
+    required String email,
+    required String password,
+  }) async {
+    isLoading.value = true;
+    errorMessage.value = null;
+    try {
+      final res = await _repository.ownerLogin(email: email, password: password);
+      if (res.success && res.token.isNotEmpty && res.owner != null) {
+        ApiClient.instance.setAuthToken(res.token);
+        owner.value = res.owner;
+        await TokenStorage.saveOwnerSession(
+          token: res.token,
+          refreshToken: res.refreshToken,
+          owner: res.owner!.toJson(),
+        );
+        fetchOwnerStats();
+        if (Get.isRegistered<AppController>()) {
+          AppController.instance.fetchOwnerMyProperties();
+        }
+        return true;
+      }
+      errorMessage.value = (res.message != null && res.message!.isNotEmpty)
+          ? res.message!
+          : 'تعذر تسجيل الدخول، تحقق من البيانات';
+      return false;
+    } on ApiException catch (e) {
+      errorMessage.value = e.message;
+      return false;
+    } catch (_) {
+      errorMessage.value = 'حدث خطأ غير متوقع، حاول مرة أخرى';
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   /// إنشاء حساب مستأجر جديد.
   Future<bool> register({
     required String fullName,
@@ -163,15 +235,25 @@ class AuthController extends GetxController {
     );
   }
 
-  /// تسجيل الخروج: تنظيف التوكن والمحلي.
+  /// تسجيل الخروج: تنظيف التوكن والمحلي (للمستأجر والمالك معاً).
   Future<void> logout() async {
     try {
-      await _repository.customerLogout();
+      if (isOwnerLoggedIn) {
+        await _repository.ownerLogout();
+      } else {
+        await _repository.customerLogout();
+      }
     } catch (_) {
       // نتجاهل فشل الخروج من الخادم ونكمل التنظيف محلياً.
     }
     ApiClient.instance.setAuthToken(null);
     customer.value = null;
+    owner.value = null;
+    ownerStats.value = null;
+    statistics.value = null;
+    if (Get.isRegistered<AppController>()) {
+      AppController.instance.ownerProperties.clear();
+    }
     await TokenStorage.clear();
   }
 

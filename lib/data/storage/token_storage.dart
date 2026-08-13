@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// حفظ وقراءة جلسة المستخدم محلياً.
 ///
 /// يخزّن: التوكن، التوكن المتجدّد، بيانات المستخدم، ونوع الحساب.
+/// للمالك استخدام مفاتيح منفصلة حتى لا تتداخل جلسات المستأجر والمالك.
 class TokenStorage {
   TokenStorage._();
 
@@ -12,6 +13,10 @@ class TokenStorage {
   static const _refreshTokenKey = 'auth_refresh_token';
   static const _customerKey = 'auth_customer_data';
   static const _accountTypeKey = 'auth_account_type';
+
+  static const _ownerTokenKey = 'auth_owner_token';
+  static const _ownerRefreshKey = 'auth_owner_refresh_token';
+  static const _ownerDataKey = 'auth_owner_data';
 
   static Future<void> saveSession({
     required String token,
@@ -54,6 +59,39 @@ class TokenStorage {
     await prefs.setString(_accountTypeKey, type);
   }
 
+  // ===== Owner session =====
+
+  /// حفظ جلسة المالك (توكن + بيانات المالك).
+  static Future<void> saveOwnerSession({
+    required String token,
+    String? refreshToken,
+    required Map<String, dynamic> owner,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_ownerTokenKey, token);
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await prefs.setString(_ownerRefreshKey, refreshToken);
+    }
+    await prefs.setString(_ownerDataKey, jsonEncode(owner));
+  }
+
+  static Future<String?> getOwnerToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_ownerTokenKey);
+  }
+
+  static Future<Map<String, dynamic>?> getOwner() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_ownerDataKey);
+    if (raw == null) return null;
+    return jsonDecode(raw) as Map<String, dynamic>;
+  }
+
+  static Future<void> saveOwner(Map<String, dynamic> owner) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_ownerDataKey, jsonEncode(owner));
+  }
+
   static Future<String?> getAccountType() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_accountTypeKey);
@@ -65,5 +103,8 @@ class TokenStorage {
     await prefs.remove(_refreshTokenKey);
     await prefs.remove(_customerKey);
     await prefs.remove(_accountTypeKey);
+    await prefs.remove(_ownerTokenKey);
+    await prefs.remove(_ownerRefreshKey);
+    await prefs.remove(_ownerDataKey);
   }
 }
