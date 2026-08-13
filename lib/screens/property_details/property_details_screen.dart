@@ -5,6 +5,7 @@ import '../../controllers/app_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/property_detail_controller.dart';
 import '../../core/constants/amenity_labels.dart';
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/routes/app_routes.dart';
 import '../../data/models/review.dart';
