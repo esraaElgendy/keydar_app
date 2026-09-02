@@ -16,6 +16,7 @@ class AppRoutes {
   static const String editProfile = '/edit-profile';
   static const String notifications = '/notifications';
   static const String contactUs = '/contact-us';
+  static const String helpCenter = '/help-center';
   static const String accountType = '/account-type';
   static const String ownerDashboard = '/owner-dashboard';
   static const String myProperties = '/my-properties';

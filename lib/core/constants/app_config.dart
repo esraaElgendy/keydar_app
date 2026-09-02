@@ -33,6 +33,9 @@ class AppConfig {
   static const String allProperties = '/properties';
   static const String propertySearch = '/properties/search';
 
+  /// خيارات الفلترة المتاحة (أنواع/مدن/تصنيفات سعر).
+  static const String propertyFilters = '/properties/filters';
+
   /// تفاصيل عقار واحد.
   static String propertyDetail(int id) => '/properties/$id';
 
@@ -87,4 +90,11 @@ class AppConfig {
 
   /// تفاصيل حجز من منظور المالك (يعرض بيانات المستأجر).
   static String ownerBookingDetail(int id) => '/owner/bookings/$id';
+
+  // ===== Help Center =====
+  /// الأسئلة الشائعة — query: `category` (booking/payment/property/general).
+  static const String faqs = '/faq';
+
+  /// إرسال رسالة تواصل معنا.
+  static const String contactMessage = '/contact/send-message';
 }

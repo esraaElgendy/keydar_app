@@ -53,8 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ]),
                     const SizedBox(height: 20),
                     _Section(title: 'الدعم', children: [
-                      _OptionTile(icon: Icons.help_outline, label: 'مركز المساعدة'),
-                      _OptionTile(icon: Icons.chat_bubble_outline, label: 'تواصل معنا', onTap: () => Get.toNamed(AppRoutes.contactUs)),
+                      _OptionTile(icon: Icons.help_outline, label: 'مركز المساعدة', onTap: () => Get.toNamed(AppRoutes.helpCenter)),
                     ]),
                     const SizedBox(height: 20),
                     GestureDetector(

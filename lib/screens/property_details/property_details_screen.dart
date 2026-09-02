@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
 import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/app_controller.dart';
 import '../../controllers/auth_controller.dart';
@@ -12,7 +14,6 @@ import '../../data/models/review.dart';
 import '../../models/property.dart';
 import '../../models/sample_data.dart';
 import '../../widgets/cards/property_card.dart';
-import '../../widgets/property_image.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
   final Property? property;
@@ -941,50 +942,96 @@ class _LocationSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('الموقع و الخريطة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
+        // ── عنوان الموقع ──
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: const Color(0xFFE8F0FE),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: [
-              const Icon(Icons.place_outlined, color: AppColors.primary, size: 40),
-              const SizedBox(height: 8),
-              Text(
-                displayLocation,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                hasCoords ? '${_fmt(lat)}, ${_fmt(lng)}' : displayLocation,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.grey.withValues(alpha: 0.7),
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              const Icon(Icons.place_outlined, color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayLocation,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    if (hasCoords) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_fmt(lat)}, ${_fmt(lng)}',
+                        style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.7)),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (hasCoords) ...[
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _openMaps(context),
-                  icon: const Icon(Icons.navigation_outlined, size: 16, color: Colors.white),
-                  label: const Text('فتح في الخرائط', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              if (hasCoords)
+                GestureDetector(
+                  onTap: () => _openMaps(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.navigation_outlined, size: 13, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('اتجاه', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                      ],
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
         ),
+        // ── الخريطة المضمنة ──
+        if (hasCoords) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 200,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: latlong.LatLng(lat, lng),
+                  initialZoom: 15,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.keydar.app',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: latlong.LatLng(lat, lng),
+                        width: 40,
+                        height: 40,
+                        child: const Icon(Icons.location_pin, color: AppColors.primary, size: 40),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

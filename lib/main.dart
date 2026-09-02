@@ -24,6 +24,7 @@ import 'screens/account/tenant_detail_screen.dart';
 import 'screens/profile/edit_profile_screen.dart';
 import 'screens/profile/notifications_screen.dart';
 import 'screens/profile/contact_us_screen.dart';
+import 'screens/help/help_center_screen.dart';
 import 'screens/owner_dashboard/owner_dashboard_screen.dart';
 import 'screens/owner_dashboard/all_orders_screen.dart';
 import 'screens/booking_requests/booking_requests_screen.dart';
@@ -72,6 +73,7 @@ class KeyDarApp extends StatelessWidget {
         GetPage(name: AppRoutes.editProfile, page: () => const EditProfileScreen()),
         GetPage(name: AppRoutes.notifications, page: () => const NotificationsScreen()),
         GetPage(name: AppRoutes.contactUs, page: () => const ContactUsScreen()),
+        GetPage(name: AppRoutes.helpCenter, page: () => const HelpCenterScreen()),
         GetPage(name: AppRoutes.accountType, page: () => const AccountTypeScreen()),
         GetPage(name: AppRoutes.ownerDashboard, page: () => const OwnerDashboardScreen()),
         GetPage(name: AppRoutes.myProperties, page: () => const MyPropertiesScreen()),

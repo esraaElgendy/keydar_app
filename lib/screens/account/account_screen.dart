@@ -476,7 +476,7 @@ class _SettingsCard extends StatelessWidget {
           const Divider(height: 20, color: Color(0xFFF2F4F7)),
           _SettingRow(icon: Icons.fingerprint, title: 'البصمة', trailing: '' , onTap: () {}),
           const Divider(height: 20, color: Color(0xFFF2F4F7)),
-          _SettingRow(icon: Icons.help_outline, title: 'مركز المساعدة', onTap: () {}),
+          _SettingRow(icon: Icons.help_outline, title: 'مركز المساعدة', onTap: () => Get.toNamed(AppRoutes.helpCenter)),
         ],
       ),
     );

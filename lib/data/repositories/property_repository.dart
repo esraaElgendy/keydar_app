@@ -372,4 +372,134 @@ class PropertyRepository {
     if (v is String) return double.tryParse(v.replaceAll(',', ''));
     return null;
   }
+
+  // ===== Search & Filters =====
+
+  /// البحث في العقارات مع فلاتر ديناميكية — `GET /properties/search`.
+  Future<SearchResult> searchProperties({
+    String? search,
+    String? city,
+    String? type,
+    int? rating,
+    int? bedrooms,
+    int? bathrooms,
+    num? minPrice,
+    num? maxPrice,
+    String? sortBy,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final query = <String, dynamic>{
+      'page': page,
+      'limit': limit,
+    };
+    if (search != null && search.isNotEmpty) query['search'] = search;
+    if (city != null && city.isNotEmpty) query['city'] = city;
+    if (type != null && type.isNotEmpty) query['type'] = type;
+    if (rating != null && rating > 0) query['rating'] = rating;
+    if (bedrooms != null && bedrooms > 0) query['bedrooms'] = bedrooms;
+    if (bathrooms != null && bathrooms > 0) query['bathrooms'] = bathrooms;
+    if (minPrice != null && minPrice > 0) query['minPrice'] = minPrice;
+    if (maxPrice != null && maxPrice > 0) query['maxPrice'] = maxPrice;
+    if (sortBy != null && sortBy.isNotEmpty) query['sortBy'] = sortBy;
+
+    final res = await _api.get(AppConfig.propertySearch, query: query);
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      return const SearchResult(properties: [], total: 0, page: 1, pages: 1);
+    }
+    return SearchResult.fromJson(data);
+  }
+
+  /// خيارات الفلترة المتاحة من السيرفر — `GET /properties/filters`.
+  Future<PropertyFilters> fetchPropertyFilters() async {
+    final res = await _api.get(AppConfig.propertyFilters);
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      return const PropertyFilters();
+    }
+    return PropertyFilters.fromJson(data);
+  }
+}
+
+/// نتيجة البحث مع التنقيل.
+class SearchResult {
+  final List<Property> properties;
+  final int total;
+  final int page;
+  final int pages;
+
+  const SearchResult({
+    required this.properties,
+    required this.total,
+    required this.page,
+    required this.pages,
+  });
+
+  factory SearchResult.fromJson(Map<String, dynamic> json) {
+    final raw = json['data'];
+    final pagination = json['pagination'];
+    final list = raw is List
+        ? raw
+            .whereType<Map>()
+            .map((e) => ApiProperty.fromJson(Map<String, dynamic>.from(e)).toProperty())
+            .toList()
+        : const <Property>[];
+    return SearchResult(
+      properties: list,
+      total: pagination is Map ? (pagination['total'] as num?)?.toInt() ?? 0 : 0,
+      page: pagination is Map ? (pagination['page'] as num?)?.toInt() ?? 1 : 1,
+      pages: pagination is Map ? (pagination['pages'] as num?)?.toInt() ?? 1 : 1,
+    );
+  }
+}
+
+/// خيارات الفلترة المتاحة من الباك-إند.
+class PropertyFilters {
+  final List<String> propertyTypes;
+  final List<String> cities;
+  final List<RatingFilter> ratings;
+  final PriceRangeFilter? priceRange;
+
+  const PropertyFilters({
+    this.propertyTypes = const [],
+    this.cities = const [],
+    this.ratings = const [],
+    this.priceRange,
+  });
+
+  factory PropertyFilters.fromJson(Map<String, dynamic> json) {
+    final types = json['propertyTypes'];
+    final citiesRaw = json['cities'];
+    final ratingsRaw = json['ratings'];
+    final priceRaw = json['priceRange'];
+    return PropertyFilters(
+      propertyTypes: types is List ? types.whereType<String>().toList() : const [],
+      cities: citiesRaw is List ? citiesRaw.whereType<String>().toList() : const [],
+      ratings: ratingsRaw is List
+          ? ratingsRaw.whereType<Map>().map((e) => RatingFilter.fromJson(Map<String, dynamic>.from(e))).toList()
+          : const [],
+      priceRange: priceRaw is Map ? PriceRangeFilter.fromJson(Map<String, dynamic>.from(priceRaw)) : null,
+    );
+  }
+}
+
+class RatingFilter {
+  final String value;
+  final int stars;
+  const RatingFilter({required this.value, required this.stars});
+  factory RatingFilter.fromJson(Map<String, dynamic> json) => RatingFilter(
+        value: json['value'] as String? ?? '',
+        stars: (json['stars'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class PriceRangeFilter {
+  final num min;
+  final num max;
+  const PriceRangeFilter({this.min = 0, this.max = 1000});
+  factory PriceRangeFilter.fromJson(Map<String, dynamic> json) => PriceRangeFilter(
+        min: json['min'] as num? ?? 0,
+        max: json['max'] as num? ?? 1000,
+      );
 }
