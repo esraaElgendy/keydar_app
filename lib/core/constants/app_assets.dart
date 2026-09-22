@@ -14,4 +14,13 @@ class AppAssets {
   static const String image5 = 'assets/image/5.png';
   static const String building = 'assets/image/building.jpg';
   static const String car = 'assets/image/car.jpg';
+
+  static const List<String> banners = [
+    'assets/banner/img.png',
+    'assets/banner/img_1.png',
+    'assets/banner/img_2.png',
+    'assets/banner/img_3.png',
+    'assets/banner/img_4.png',
+    'assets/banner/img_5.png',
+  ];
 }

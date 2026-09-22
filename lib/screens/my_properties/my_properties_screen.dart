@@ -20,10 +20,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctrl = Get.find<AppController>();
-      if (ctrl.ownerProperties.isEmpty) {
-        ctrl.fetchOwnerMyProperties();
-      }
+      Get.find<AppController>().fetchOwnerMyProperties(silent: true);
     });
   }
 
@@ -135,41 +132,48 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: properties.length + 1,
-                      itemBuilder: (_, i) {
-                        if (i == 0) {
+                  : RefreshIndicator(
+                      color: AppColors.primary,
+                      onRefresh: () => ctrl.fetchOwnerMyProperties(silent: true),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        itemCount: properties.length + 1,
+                        itemBuilder: (_, i) {
+                          if (i == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: _AddPropertyCard(
+                                onTap: () => Get.toNamed(AppRoutes.addProperty),
+                              ),
+                            );
+                          }
+                          final p = properties[i - 1];
+                          final statusColor = p.badge1 == 'متاحة' ? const Color(0xFF4CAF50)
+                              : p.badge1 == 'مؤجرة' ? const Color(0xFFFF9800)
+                              : p.badge1 == 'قيد المراجعة' ? const Color(0xFF9E9E9E)
+                              : const Color(0xFF4CAF50);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 14),
-                            child: _AddPropertyCard(
-                              onTap: () => Get.toNamed(AppRoutes.addProperty),
+                            child: _PropertyCard(
+                              title: p.title,
+                              location: p.location,
+                              price: p.price,
+                              period: p.period,
+                              status: p.badge1,
+                              statusColor: statusColor,
+                              imageUrl: p.imageUrl,
+                              rooms: p.bedrooms.toString(),
+                              baths: p.bathrooms.toString(),
+                              area: p.area.toStringAsFixed(0),
+                              onTap: () async {
+                                await Get.to(() => OwnerPropertyDetailScreen(property: p));
+                                if (p.id != null) Get.find<AppController>().refreshOwnerProperty(p.id!);
+                              },
                             ),
                           );
-                        }
-                        final p = properties[i - 1];
-                        final statusColor = p.badge1 == 'متاحة' ? const Color(0xFF4CAF50)
-                            : p.badge1 == 'مؤجرة' ? const Color(0xFFFF9800)
-                            : p.badge1 == 'قيد المراجعة' ? const Color(0xFF9E9E9E)
-                            : const Color(0xFF4CAF50);
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: _PropertyCard(
-                            title: p.title,
-                            location: p.location,
-                            price: p.price,
-                            period: p.period,
-                            status: p.badge1,
-                            statusColor: statusColor,
-                            imageUrl: p.imageUrl,
-                            rooms: p.bedrooms.toString(),
-                            baths: p.bathrooms.toString(),
-                            area: p.area.toStringAsFixed(0),
-                            onTap: () => Get.to(() => OwnerPropertyDetailScreen(property: p)),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
             ),
           ],

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../data/models/review.dart';
 import '../data/repositories/property_repository.dart';
@@ -31,19 +32,36 @@ class PropertyDetailController extends GetxController {
   Future<void> load({required Property fromList}) async {
     final id = fromList.id;
     if (id == null) {
-      // بيانات محلية — لا يوجد endpoint لها.
+      debugPrint('⚠️ load: fromList.id is null, using list data only');
       property.value = fromList;
       return;
     }
-    // نعرض فوراً بيانات الكارت ونحدّثها بالتفاصيل لما تدخل.
+    debugPrint('🔄 load: fetching detail for id=$id');
     property.value = fromList;
     loading.value = true;
     errorMessage.value = null;
     try {
-      final detail = await _repository.fetchDetail(id: id);
+      final results = await Future.wait([
+        _repository.fetchDetail(id: id),
+        _repository.fetchPropertyImages(id),
+      ]);
+      var detail = results[0] as Property;
+      final extraImages = results[1] as List<String>;
+      debugPrint('✅ load: detail received desc="${detail.description}" kitchen=${detail.kitchenAmenities.length} bath=${detail.bathroomAmenities.length} primary=${detail.primaryAmenities.length}');
+      if (extraImages.isNotEmpty) {
+        final merged = <String>{...extraImages, ...detail.gallery}.toList();
+        detail = detail.copyWith(
+          gallery: merged,
+          imageUrl: detail.imageUrl ?? extraImages.first,
+        );
+      }
       property.value = detail;
-      loadReviews(); // نبدأ تحميل التقييمات هنا أيضاً.
-    } catch (e) {
+      property.refresh();
+      debugPrint('✅ load: property.refresh() called');
+      loadReviews();
+    } catch (e, st) {
+      debugPrint('🔴 fetchDetail FAILED id=$id error=$e');
+      debugPrint('🔴 stackTrace: $st');
       errorMessage.value = 'تعذر تحميل التفاصيل، تحقق من اتصالك بالإنترنت';
     } finally {
       loading.value = false;

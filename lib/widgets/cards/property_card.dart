@@ -139,11 +139,13 @@ class PropertyCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      property.location,
-                      style: const TextStyle(fontSize: 11, color: AppColors.primary),
+                    Flexible(
+                      child: Text(
+                        property.location,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.primary),
+                      ),
                     ),
                     const SizedBox(width: 4),
                     const Icon(Icons.location_on, color: AppColors.primary, size: 12),
@@ -152,13 +154,17 @@ class PropertyCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Text(
-                      property.price,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    Flexible(
+                      child: Text(
+                        property.price,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      ),
                     ),
                     const SizedBox(width: 2),
                     Text(
                       property.period,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 10, color: AppColors.grey.withValues(alpha: 0.6)),
                     ),
                   ],
@@ -166,11 +172,11 @@ class PropertyCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    _Spec(icon: Icons.bed_outlined, text: '${property.bedrooms} غرف'),
+                    Expanded(child: _Spec(icon: Icons.bed_outlined, text: '${property.bedrooms} غرف')),
                     const SizedBox(width: 8),
-                    _Spec(icon: Icons.bathtub_outlined, text: '${property.bathrooms} حمام'),
+                    Expanded(child: _Spec(icon: Icons.bathtub_outlined, text: '${property.bathrooms} حمام')),
                     const SizedBox(width: 8),
-                    _Spec(icon: Icons.straighten, text: '${property.area} م²'),
+                    Expanded(child: _Spec(icon: Icons.straighten, text: '${property.area} م²')),
                   ],
                 ),
               ],
@@ -212,7 +218,8 @@ class _Spec extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(text, style: TextStyle(fontSize: 10, color: AppColors.grey.withValues(alpha: 0.6))),
+        Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: AppColors.grey.withValues(alpha: 0.6)))),
         const SizedBox(width: 2),
         Icon(icon, size: 12, color: AppColors.grey.withValues(alpha: 0.5)),
       ],

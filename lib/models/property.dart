@@ -23,6 +23,7 @@ class Property {
   final String? status;
   final String? furnishing;
   final String? city;
+  final String? videoUrl;
   final int guests;
   final double? latitude;
   final double? longitude;
@@ -60,6 +61,7 @@ class Property {
     this.status,
     this.furnishing,
     this.city,
+    this.videoUrl,
     this.guests = 0,
     this.latitude,
     this.longitude,
@@ -97,6 +99,7 @@ class Property {
         'status': status,
         'furnishing': furnishing,
         'city': city,
+        'videoUrl': videoUrl,
         'guests': guests,
         'latitude': latitude,
         'longitude': longitude,
@@ -133,6 +136,7 @@ class Property {
         status: json['status'] as String?,
         furnishing: json['furnishing'] as String?,
         city: json['city'] as String?,
+        videoUrl: json['videoUrl'] as String? ?? json['video_url'] as String? ?? json['video'] as String?,
         guests: (json['guests'] as num?)?.toInt() ?? 0,
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -148,28 +152,20 @@ class Property {
         features: (json['features'] as List?)?.cast<String>() ?? const [],
       );
 
-  /// معرف ثابت للمقارنة: يفضّل `id` القادم من الـ API، وإلا (title+location).
-  String get _identityKey => id != null ? 'id:$id' : '$title|$location';
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is Property && other._identityKey == _identityKey);
-
-  @override
-  int get hashCode => _identityKey.hashCode;
-
   Property copyWith({
     bool? isFavorite,
     String? description,
     int? reviewsCount,
     String? floor,
+    String? imageUrl,
+    List<String>? gallery,
     List<String>? kitchenAmenities,
     List<String>? bathroomAmenities,
     List<String>? primaryAmenities,
     List<String>? secondaryAmenities,
     List<String>? features,
     List<String>? amenities,
+    String? videoUrl,
   }) {
     return Property(
       title: title,
@@ -189,10 +185,12 @@ class Property {
       isFavorite: isFavorite ?? this.isFavorite,
       amenities: amenities ?? this.amenities,
       id: id,
-      imageUrl: imageUrl,
-      gallery: gallery,
+      imageUrl: imageUrl ?? this.imageUrl,
+      gallery: gallery ?? this.gallery,
       status: status,
       furnishing: furnishing,
+      city: city,
+      videoUrl: videoUrl ?? this.videoUrl,
       guests: guests,
       latitude: latitude,
       longitude: longitude,

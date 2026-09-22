@@ -40,9 +40,15 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? query,
   }) async {
+    if (kDebugMode) debugPrint('API ▶ GET $path');
     try {
-      return await dio.get(path, queryParameters: query);
+      final res = await dio.get(path, queryParameters: query);
+      if (kDebugMode) debugPrint('API ◀ GET status=${res.statusCode} path=$path');
+      return res;
     } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('API ✖ GET status=${e.response?.statusCode} path=$path body=${e.response?.data}');
+      }
       throw ApiException.fromDio(e);
     }
   }
@@ -83,6 +89,27 @@ class ApiClient {
     try {
       return await dio.delete(path);
     } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// رفع ملفات multipart (صور).
+  Future<Response<dynamic>> upload(
+    String path, {
+    required List<MultipartFile> files,
+    String fieldName = 'images',
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        fieldName: files,
+      });
+      final res = await dio.post(path, data: formData);
+      if (kDebugMode) debugPrint('API ◀ upload status=${res.statusCode}');
+      return res;
+    } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('API ✖ upload status=${e.response?.statusCode} path=$path body=${e.response?.data}');
+      }
       throw ApiException.fromDio(e);
     }
   }

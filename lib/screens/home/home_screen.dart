@@ -32,6 +32,7 @@ class HomeScreen extends StatelessWidget {
                 color: AppColors.primary,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
+                  clipBehavior: Clip.hardEdge,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -181,51 +182,117 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-class _BannerCarousel extends StatelessWidget {
+class _BannerCarousel extends StatefulWidget {
   const _BannerCarousel();
 
   @override
+  State<_BannerCarousel> createState() => _BannerCarouselState();
+}
+
+class _BannerCarouselState extends State<_BannerCarousel> {
+  late final PageController _pageCtrl;
+  int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController(viewportFraction: 1.0);
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 4));
+      if (!mounted) return false;
+      final total = AppAssets.banners.length;
+      _current = (_current + 1) % total;
+      if (_pageCtrl.hasClients) {
+        await _pageCtrl.animateToPage(
+          _current,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      }
+      return mounted;
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Stack(
-        children: [
-          Image.asset(AppAssets.building, height: 160, width: double.infinity, fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(height: 160, color: AppColors.darkBlue),
-          ),
-          Container(height: 160, decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              colors: [Colors.transparent, Colors.black54],
-            ),
-          )),
-          Positioned(
-            left: 0, right: 0, bottom: 60,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
+    final total = AppAssets.banners.length;
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            height: 160,
+            child: Stack(
               children: [
-                const Text('استأجر راحتك وين ما تكون', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.white)),
-                const SizedBox(height: 6),
-                Text('شقق وفنادق للإيجار اليومي، الشهري، أو السنوي — بكل سهولة وثقة.', style: TextStyle(fontSize: 12, color: AppColors.white.withValues(alpha: 0.8))),
+                PageView.builder(
+                  controller: _pageCtrl,
+                  itemCount: total,
+                  onPageChanged: (i) => setState(() => _current = i),
+                  itemBuilder: (_, i) => Image.asset(
+                    AppAssets.banners[i],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.darkBlue,
+                      child: const Icon(Icons.image, color: Colors.white, size: 40),
+                    ),
+                  ),
+                ),
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black54],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 16, right: 16, bottom: 36,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text('استأجر راحتك وين ما تكون',
+                          textAlign: TextAlign.center,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.white)),
+                      const SizedBox(height: 4),
+                      Text('شقق وفنادق للإيجار اليومي، الشهري، أو السنوي — بكل سهولة وثقة.',
+                          textAlign: TextAlign.center,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.85))),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          Positioned(
-            bottom: 12, left: 0, right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(3, (i) => Container(
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: i == 0 ? 20 : 8, height: 8,
-                decoration: BoxDecoration(
-                  color: i == 0 ? AppColors.primary : AppColors.white.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              )),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(total, (i) => AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: i == _current ? 20 : 7,
+            height: 7,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _current ? AppColors.primary : AppColors.grey.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(4),
             ),
-          ),
-        ],
-      ),
+          )),
+        ),
+      ],
     );
   }
 }

@@ -27,12 +27,15 @@ class AccountTypeScreen extends StatelessWidget {
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(height: 2),
-                    const Text(
-                      'KeyDar',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
+                    RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.black),
+                        children: const [
+                          TextSpan(text: 'K', style: TextStyle(fontSize: 38)),
+                          TextSpan(text: 'ey'),
+                          TextSpan(text: 'D', style: TextStyle(fontSize: 38)),
+                          TextSpan(text: 'ar'),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 28),

@@ -1,9 +1,17 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import '../../controllers/app_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/location_helper.dart';
 import '../../data/repositories/property_repository.dart';
+import '../property_map/interactive_map_picker.dart';
+import 'upload_images_screen.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -16,38 +24,38 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   int _currentStep = 0;
   late PageController _pageController;
 
-  // Step 1
+  // ── Step 1: Basic Info ──
   String _propertyName = '';
   String _propertyDescription = '';
-  String _propertyType = 'فيلا';
+  String _propertyType = 'شقة';
   String _propertyCity = 'الرياض';
   String _furnishing = 'مفروش';
   String _area = '';
   String _beds = '';
   String _baths = '';
+  String _kitchens = '';
   String _guests = '';
   String _dailyPrice = '';
   String _monthlyPrice = '';
   String _yearlyPrice = '';
+  String _period = 'يومياً';
 
-  // Step 2
+  // ── Step 2: Location ──
   String _address = '';
   String _buildingNumber = '';
   String _floor = '';
+  LatLng? _selectedLocation;
 
-  // Step 3
-  bool _hasMainImage = false;
-  final List<bool> _extraImages = [false, false, false, false];
+  // ── Step 3: Amenities ──
+  final Set<String> _primaryAmenities = {};
+  final Set<String> _secondaryAmenities = {};
+  final Set<String> _kitchenAmenities = {};
+  final Set<String> _bathroomAmenities = {};
+  final Set<String> _propertyFeatures = {};
 
-  // Step 4
-  final Set<String> _selectedAmenities = {};
-
-  // Step 5
-  late int _currentMonth;
-  late int _currentYear;
-  final Set<int> _bookedDays = {15, 16, 17};
-  final Set<int> _availableDays = {1, 2, 3, 5, 8, 10, 12, 20, 22, 25, 28, 29, 30};
-  int? _selectedDay;
+  // ── الصور المختارة ──
+  final List<String> _selectedImagePaths = [];
+  String? _selectedVideoPath;
 
   bool _publishing = false;
 
@@ -55,9 +63,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
-    final now = DateTime.now();
-    _currentMonth = now.month;
-    _currentYear = now.year;
   }
 
   @override
@@ -67,7 +72,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 
   void _next() {
-    if (_currentStep < 5) {
+    if (_currentStep < 4) {
       _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     }
   }
@@ -80,64 +85,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     }
   }
 
-  Future<void> _publish() async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    if (_propertyName.trim().isEmpty || _propertyDescription.trim().isEmpty) {
-      Get.snackbar('معلومات ناقصة', 'أدخل اسم العقار ووصفه قبل النشر',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
-      return;
-    }
-    setState(() => _publishing = true);
-    try {
-      final created = await PropertyRepository().createOwnerProperty(
-        title: _propertyName.trim(),
-        description: _propertyDescription.trim(),
-        location: (_propertyCity + (_address.isNotEmpty ? '، $_address' : '')).trim(),
-        city: _cityMap[_propertyCity] ?? 'Riyadh',
-        propertyType: _typeMap[_propertyType] ?? 'villa',
-        furnishing: _furnishingMap[_furnishing] ?? 'furnished',
-        area: num.tryParse(_area) ?? 0,
-        prices: {
-          'daily': num.tryParse(_dailyPrice.replaceAll(',', '')) ?? 0,
-          'monthly': num.tryParse(_monthlyPrice.replaceAll(',', '')) ?? 0,
-          'yearly': num.tryParse(_yearlyPrice.replaceAll(',', '')) ?? 0,
-        },
-        period: 'monthly',
-        status: 'available',
-        beds: int.tryParse(_beds) ?? 1,
-        baths: int.tryParse(_baths) ?? 1,
-        kitchens: 0,
-        guests: int.tryParse(_guests) ?? 1,
-        floor: _floor.isEmpty ? null : _floor,
-        buildingNumber: _buildingNumber.isEmpty ? null : _buildingNumber,
-        amenities: _selectedAmenities.map((a) => _amenityMap[a] ?? a).toList(),
-        primaryAmenities: _selectedAmenities.map((a) => _amenityMap[a] ?? a).toList(),
-        cancellationPolicy: 'Flexible',
-      );
-      final ctrl = Get.find<AppController>();
-      ctrl.ownerProperties.insert(0, created);
-      // تحديث إحصائيات المالك بعد إضافة عقار جديد.
-      AuthController.instance.fetchOwnerStats();
-      ctrl.fetchOwnerMyProperties(silent: true);
-      Get.snackbar('تم النشر', 'تم إضافة العقار بنجاح، بانتظار المراجعة',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
-      Get.back();
-    } catch (e) {
-      Get.snackbar('فشل النشر', 'تعذر إرسال العقار، حاول مرة أخرى.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFFC62828),
-          colorText: AppColors.white);
-    } finally {
-      if (mounted) setState(() => _publishing = false);
-    }
-  }
+  // ═══════════════════════════════════════════════
+  //  Maps
+  // ═══════════════════════════════════════════════
 
   static const Map<String, String> _typeMap = {
-    'فيلا': 'villa', 'شقة': 'apartment', 'مكتب': 'office', 'دوبلكس': 'duplex',
+    'شقة': 'apartment', 'فيلا': 'villa', 'مكتب': 'office', 'دوبلكس': 'duplex',
     'استوديو': 'studio', 'بنتهاوس': 'penthouse', 'تجاري': 'commercial', 'مزرعة': 'farm',
   };
 
@@ -150,15 +103,123 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     'مفروش': 'furnished', 'غير مفروش': 'unfurnished', 'شبه مفروش': 'semi-furnished',
   };
 
-  static const Map<String, String> _amenityMap = {
-    'إنترنت': 'wifi', 'نادي رياضي': 'gym', 'مسبح': 'pool',
-    'موقف': 'parking', 'أمن 24/7': 'security', 'مصعد': 'elevator',
+  static const Map<String, String> _periodMap = {
+    'يومياً': 'daily', 'شهرياً': 'monthly', 'سنوياً': 'yearly',
   };
 
-  String get _selectedAmenitiesStr {
-    if (_selectedAmenities.isEmpty) return 'لم يتم الاختيار';
-    return _selectedAmenities.join('، ');
+  // ═══════════════════════════════════════════════
+  //  Publish
+  // ═══════════════════════════════════════════════
+
+  Future<void> _publish() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_propertyName.trim().isEmpty || _propertyDescription.trim().isEmpty) {
+      Get.snackbar('معلومات ناقصة', 'أدخل اسم العقار ووصفه',
+          snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: AppColors.white);
+      return;
+    }
+    setState(() => _publishing = true);
+    debugPrint('📍 _publish: selectedLocation=$_selectedLocation');
+    debugPrint('📍 _publish: lat=${_selectedLocation?.latitude} lng=${_selectedLocation?.longitude}');
+    try {
+      final allAmenities = {..._primaryAmenities, ..._secondaryAmenities};
+
+      // التأكد من وجود إحداثيات الموقع دائماً
+      LatLng? finalCoords = _selectedLocation;
+      if (finalCoords == null) {
+        if (_address.trim().isNotEmpty) {
+          finalCoords = await LocationHelper.geocodeAddress(_address);
+        }
+        finalCoords ??= LocationHelper.getFallbackCoords(_propertyCity);
+      }
+
+      final created = await PropertyRepository().createOwnerProperty(
+        title: _propertyName.trim(),
+        description: _propertyDescription.trim(),
+        location: (_propertyCity + (_address.isNotEmpty ? '، $_address' : '')).trim(),
+        city: _cityMap[_propertyCity] ?? 'Riyadh',
+        address: _address.trim().isNotEmpty ? _address.trim() : null,
+        propertyType: _typeMap[_propertyType] ?? 'apartment',
+        furnishing: _furnishingMap[_furnishing] ?? 'furnished',
+        area: num.tryParse(_area) ?? 0,
+        prices: {
+          'daily': num.tryParse(_dailyPrice.replaceAll(',', '')) ?? 0,
+          'monthly': num.tryParse(_monthlyPrice.replaceAll(',', '')) ?? 0,
+          'yearly': num.tryParse(_yearlyPrice.replaceAll(',', '')) ?? 0,
+        },
+        period: _periodMap[_period] ?? 'daily',
+        status: 'available',
+        beds: int.tryParse(_beds) ?? 1,
+        baths: int.tryParse(_baths) ?? 1,
+        kitchens: int.tryParse(_kitchens) ?? 0,
+        guests: int.tryParse(_guests) ?? 1,
+        floor: _floor.isEmpty ? null : _floor,
+        buildingNumber: _buildingNumber.isEmpty ? null : _buildingNumber,
+        amenities: allAmenities.toList(),
+        primaryAmenities: _primaryAmenities.toList(),
+        secondaryAmenities: _secondaryAmenities.toList(),
+        kitchenAmenities: _kitchenAmenities.toList(),
+        bathroomAmenities: _bathroomAmenities.toList(),
+        propertyFeatures: _propertyFeatures.toList(),
+        cancellationPolicy: 'Flexible',
+        latitude: finalCoords?.latitude,
+        longitude: finalCoords?.longitude,
+      );
+
+      final ctrl = Get.find<AppController>();
+      ctrl.ownerProperties.insert(0, created);
+      AuthController.instance.fetchOwnerStats();
+      ctrl.fetchOwnerMyProperties(silent: true);
+
+      // رفع الصور المختارة إن وُجدت
+      if (created.id != null && _selectedImagePaths.isNotEmpty) {
+        await PropertyRepository().uploadPropertyImages(
+          propertyId: created.id!,
+          files: _selectedImagePaths,
+        );
+      }
+
+      // رفع الفيديو إن وُجد
+      if (created.id != null && _selectedVideoPath != null) {
+        await PropertyRepository().uploadPropertyVideo(
+          propertyId: created.id!,
+          filePath: _selectedVideoPath!,
+        );
+      }
+
+      Get.snackbar('تم النشر', 'تم إضافة العقار بنجاح',
+          snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: AppColors.white);
+
+      // الانتقال لشاشة رفع الصور والفيديو
+      if (created.id != null) {
+        Get.off(() => UploadImagesScreen(propertyId: created.id!, propertyTitle: created.title));
+      } else {
+        Get.back();
+      }
+    } catch (e, stack) {
+      debugPrint('❌ publish error: $e');
+      debugPrint('Stack: $stack');
+      String msg = 'تعذر إرسال العقار، حاول مرة أخرى.';
+      final errStr = e.toString();
+      if (errStr.contains('FormatException')) {
+        msg = 'استجابة غير متوقعة من السيرفر.';
+      } else if (errStr.contains('422')) {
+        msg = 'بيانات غير صالحة — تأكد من ملء كل الحقول المطلوبة.';
+      } else if (errStr.contains('401')) {
+        msg = 'انتهت صلاحية تسجيل الدخول.';
+      } else if (errStr.contains('SocketException') || errStr.contains('timeout')) {
+        msg = 'خطأ في الاتصال بالسيرفر.';
+      }
+      Get.snackbar('فشل النشر', msg,
+          snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: AppColors.white);
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
   }
+
+  // ═══════════════════════════════════════════════
+  //  Build
+  // ═══════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -169,13 +230,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text('إضافة عقار جديد', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-        leading: Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: AppColors.black),
-            onPressed: _back,
-          ),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back, color: AppColors.black), onPressed: _back),
       ),
       body: Column(
         children: [
@@ -186,14 +241,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: (_currentStep + 1) / 6,
+                    value: (_currentStep + 1) / 5,
                     backgroundColor: AppColors.fieldBorder,
                     valueColor: const AlwaysStoppedAnimation(AppColors.primary),
                     minHeight: 6,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('الخطوة ${_currentStep + 1} من 6', style: const TextStyle(fontSize: 12, color: AppColors.grey)),
+                Text('الخطوة ${_currentStep + 1} من 5', style: const TextStyle(fontSize: 12, color: AppColors.grey)),
               ],
             ),
           ),
@@ -204,19 +259,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               onPageChanged: (i) => setState(() => _currentStep = i),
               children: [
                 _StepInfo(
-                  step: 1, onNext: _next,
-                  propertyName: _propertyName,
-                  propertyDescription: _propertyDescription,
-                  propertyType: _propertyType,
-                  propertyCity: _propertyCity,
-                  furnishing: _furnishing,
-                  area: _area,
-                  beds: _beds,
-                  baths: _baths,
-                  guests: _guests,
-                  dailyPrice: _dailyPrice,
-                  monthlyPrice: _monthlyPrice,
-                  yearlyPrice: _yearlyPrice,
+                  propertyName: _propertyName, propertyDescription: _propertyDescription,
+                  propertyType: _propertyType, propertyCity: _propertyCity,
+                  furnishing: _furnishing, area: _area,
+                  beds: _beds, baths: _baths, kitchens: _kitchens, guests: _guests,
+                  dailyPrice: _dailyPrice, monthlyPrice: _monthlyPrice, yearlyPrice: _yearlyPrice,
+                  period: _period,
                   onNameChanged: (v) => setState(() => _propertyName = v),
                   onDescriptionChanged: (v) => setState(() => _propertyDescription = v),
                   onTypeChanged: (v) => setState(() => _propertyType = v),
@@ -225,83 +273,71 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   onAreaChanged: (v) => setState(() => _area = v),
                   onBedsChanged: (v) => setState(() => _beds = v),
                   onBathsChanged: (v) => setState(() => _baths = v),
+                  onKitchensChanged: (v) => setState(() => _kitchens = v),
                   onGuestsChanged: (v) => setState(() => _guests = v),
                   onDailyPriceChanged: (v) => setState(() => _dailyPrice = v),
                   onMonthlyPriceChanged: (v) => setState(() => _monthlyPrice = v),
                   onYearlyPriceChanged: (v) => setState(() => _yearlyPrice = v),
+                  onPeriodChanged: (v) => setState(() => _period = v),
+                  onNext: _next,
                 ),
                 _StepLocation(
-                  step: 2, onNext: _next,
-                  address: _address,
-                  buildingNumber: _buildingNumber,
-                  floor: _floor,
+                  address: _address, buildingNumber: _buildingNumber, floor: _floor,
+                  selectedLocation: _selectedLocation,
                   onAddressChanged: (v) => setState(() => _address = v),
                   onBuildingChanged: (v) => setState(() => _buildingNumber = v),
                   onFloorChanged: (v) => setState(() => _floor = v),
-                ),
-                _StepPhotos(
-                  step: 3, onNext: _next,
-                  hasMainImage: _hasMainImage,
-                  extraImages: _extraImages,
-                  onAddMain: () => setState(() => _hasMainImage = true),
-                  onAddExtra: (i) => setState(() => _extraImages[i] = true),
+                  onLocationPicked: (ll) => setState(() => _selectedLocation = ll),
+                  onNext: _next,
                 ),
                 _StepAmenities(
-                  step: 4, onNext: _next,
-                  selectedAmenities: _selectedAmenities,
-                  onToggle: (label) => setState(() {
-                    if (_selectedAmenities.contains(label)) {
-                      _selectedAmenities.remove(label);
-                    } else {
-                      _selectedAmenities.add(label);
-                    }
+                  primaryAmenities: _primaryAmenities, secondaryAmenities: _secondaryAmenities,
+                  kitchenAmenities: _kitchenAmenities, bathroomAmenities: _bathroomAmenities,
+                  propertyFeatures: _propertyFeatures,
+                  onToggle: (set, label) => setState(() {
+                    if (set.contains(label)) { set.remove(label); } else { set.add(label); }
                   }),
+                  onNext: _next,
                 ),
-                _StepAvailability(
-                  step: 5, onNext: _next,
-                  currentMonth: _currentMonth,
-                  currentYear: _currentYear,
-                  bookedDays: _bookedDays,
-                  availableDays: _availableDays,
-                  selectedDay: _selectedDay,
-                  onPrevMonth: () => setState(() {
-                    if (_currentMonth == 1) {
-                      _currentMonth = 12;
-                      _currentYear--;
-                    } else {
-                      _currentMonth--;
+                _StepPhotos(
+                  selectedPaths: _selectedImagePaths,
+                  selectedVideoPath: _selectedVideoPath,
+                  onAdd: () async {
+                    final picker = ImagePicker();
+                    final images = await picker.pickMultiImage(imageQuality: 85);
+                    if (images.isNotEmpty) {
+                      setState(() => _selectedImagePaths.addAll(images.map((e) => e.path)));
                     }
-                  }),
-                  onNextMonth: () => setState(() {
-                    if (_currentMonth == 12) {
-                      _currentMonth = 1;
-                      _currentYear++;
-                    } else {
-                      _currentMonth++;
+                  },
+                  onAddVideo: () async {
+                    final picker = ImagePicker();
+                    final video = await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(minutes: 5));
+                    if (video != null) {
+                      final file = File(video.path);
+                      final sizeMb = await file.length() / (1024 * 1024);
+                      if (sizeMb > 50) {
+                        Get.snackbar('ملف كبير جداً', 'الحد الأقصى 50 ميجا',
+                            snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFFF6F00), colorText: Colors.white);
+                        return;
+                      }
+                      setState(() => _selectedVideoPath = video.path);
                     }
-                  }),
-                  onDayTap: (day) => setState(() {
-                    if (day == _selectedDay) {
-                      _selectedDay = null;
-                    } else {
-                      _selectedDay = day;
-                    }
-                  }),
+                  },
+                  onRemove: (i) => setState(() => _selectedImagePaths.removeAt(i)),
+                  onRemoveVideo: () => setState(() => _selectedVideoPath = null),
+                  onNext: _next,
                 ),
                 _StepReview(
-                  step: 6, onPublish: _publish, publishing: _publishing,
-                  propertyName: _propertyName,
-                  propertyType: _propertyType,
-                  propertyCity: _propertyCity,
-                  furnishing: _furnishing,
-                  area: _area,
-                  beds: _beds,
-                  baths: _baths,
-                  dailyPrice: _dailyPrice,
-                  monthlyPrice: _monthlyPrice,
-                  yearlyPrice: _yearlyPrice,
-                  address: _address,
-                  amenities: _selectedAmenitiesStr,
+                  onPublish: _publish, publishing: _publishing,
+                  propertyName: _propertyName, propertyType: _propertyType,
+                  propertyCity: _propertyCity, furnishing: _furnishing, area: _area,
+                  beds: _beds, baths: _baths, kitchens: _kitchens, guests: _guests,
+                  dailyPrice: _dailyPrice, monthlyPrice: _monthlyPrice, yearlyPrice: _yearlyPrice,
+                  period: _period, address: _address,
+                  primaryAmenities: _primaryAmenities, secondaryAmenities: _secondaryAmenities,
+                  kitchenAmenities: _kitchenAmenities, bathroomAmenities: _bathroomAmenities,
+                  propertyFeatures: _propertyFeatures,
+                  locationPicked: _selectedLocation != null,
                 ),
               ],
             ),
@@ -312,27 +348,34 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 }
 
-// ───── Step 1: Property Info ─────
+// ═══════════════════════════════════════════════
+//  Step 1: Basic Info
+// ═══════════════════════════════════════════════
+
 class _StepInfo extends StatelessWidget {
-  final int step;
-  final VoidCallback onNext;
   final String propertyName, propertyDescription, propertyType, propertyCity;
-  final String furnishing, area, beds, baths, guests;
-  final String dailyPrice, monthlyPrice, yearlyPrice;
+  final String furnishing, area, beds, baths, kitchens, guests;
+  final String dailyPrice, monthlyPrice, yearlyPrice, period;
   final ValueChanged<String> onNameChanged, onDescriptionChanged, onTypeChanged, onCityChanged;
-  final ValueChanged<String> onFurnishingChanged, onAreaChanged, onBedsChanged, onBathsChanged, onGuestsChanged;
+  final ValueChanged<String> onFurnishingChanged, onAreaChanged;
+  final ValueChanged<String> onBedsChanged, onBathsChanged, onKitchensChanged, onGuestsChanged;
   final ValueChanged<String> onDailyPriceChanged, onMonthlyPriceChanged, onYearlyPriceChanged;
+  final ValueChanged<String> onPeriodChanged;
+  final VoidCallback onNext;
+
   const _StepInfo({
-    required this.step, required this.onNext,
     required this.propertyName, required this.propertyDescription,
     required this.propertyType, required this.propertyCity,
-    required this.furnishing, required this.area, required this.beds, required this.baths, required this.guests,
+    required this.furnishing, required this.area,
+    required this.beds, required this.baths, required this.kitchens, required this.guests,
     required this.dailyPrice, required this.monthlyPrice, required this.yearlyPrice,
+    required this.period,
     required this.onNameChanged, required this.onDescriptionChanged,
     required this.onTypeChanged, required this.onCityChanged,
     required this.onFurnishingChanged, required this.onAreaChanged,
-    required this.onBedsChanged, required this.onBathsChanged, required this.onGuestsChanged,
+    required this.onBedsChanged, required this.onBathsChanged, required this.onKitchensChanged, required this.onGuestsChanged,
     required this.onDailyPriceChanged, required this.onMonthlyPriceChanged, required this.onYearlyPriceChanged,
+    required this.onPeriodChanged, required this.onNext,
   });
 
   @override
@@ -341,224 +384,62 @@ class _StepInfo extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.fieldBorder),
-                      child: const Icon(Icons.help_outline, color: AppColors.grey, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('معلومات العقار', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const _InputLabel(text: 'اسم العقار'),
-                const SizedBox(height: 6),
-                _FormField(hint: 'مثال: فيلا فاخرة بموقع مميز', onChanged: onNameChanged),
-                const SizedBox(height: 16),
-                const _InputLabel(text: 'وصف العقار'),
-                const SizedBox(height: 6),
-                _FormField(hint: 'اكتب وصفاً مفصلاً للعقار...', maxLines: 4, onChanged: onDescriptionChanged),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _InputLabel(text: 'نوع العقار'),
-                        const SizedBox(height: 6),
-                        _DropdownField(
-                          value: propertyType,
-                          items: const ['فيلا', 'شقة', 'مكتب', 'دوبلكس', 'استوديو', 'بنتهاوس', 'تجاري', 'مزرعة'],
-                          onChanged: onTypeChanged,
-                        ),
-                      ],
-                    )),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _InputLabel(text: 'المدينة'),
-                        const SizedBox(height: 6),
-                        _DropdownField(
-                          value: propertyCity,
-                          items: const ['الرياض', 'جدة', 'الدمام', 'الخبر', 'مكة', 'المدينة', 'أبها', 'تبوك'],
-                          onChanged: onCityChanged,
-                        ),
-                      ],
-                    )),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const _InputLabel(text: 'حالة التأثيث'),
-                const SizedBox(height: 6),
-                _DropdownField(
-                  value: furnishing,
-                  items: const ['مفروش', 'غير مفروش', 'شبه مفروش'],
-                  onChanged: onFurnishingChanged,
-                ),
-                const SizedBox(height: 16),
-                const _InputLabel(text: 'المساحة (م²)'),
-                const SizedBox(height: 6),
-                _FormField(hint: 'مثال: 180', keyboardType: TextInputType.number, onChanged: onAreaChanged),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: _CountField(label: 'غرف النوم', value: beds, onChanged: onBedsChanged)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _CountField(label: 'الحمامات', value: baths, onChanged: onBathsChanged)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _CountField(label: 'الضيوف', value: guests, onChanged: onGuestsChanged)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const _InputLabel(text: 'الأسعار (SAR)'),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _InputLabel(text: 'يومي'),
-                        const SizedBox(height: 6),
-                        _FormField(hint: '450', keyboardType: TextInputType.number, onChanged: onDailyPriceChanged),
-                      ],
-                    )),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _InputLabel(text: 'شهري'),
-                        const SizedBox(height: 6),
-                        _FormField(hint: '3,200', keyboardType: TextInputType.number, onChanged: onMonthlyPriceChanged),
-                      ],
-                    )),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _InputLabel(text: 'سنوي'),
-                        const SizedBox(height: 6),
-                        _FormField(hint: '32,000', keyboardType: TextInputType.number, onChanged: onYearlyPriceChanged),
-                      ],
-                    )),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: onNext),
-          const SizedBox(height: 30),
-        ],
-      ),
-    );
-  }
-}
-
-// ───── Step 2: Location ─────
-class _StepLocation extends StatelessWidget {
-  final int step;
-  final VoidCallback onNext;
-  final String address, buildingNumber, floor;
-  final ValueChanged<String> onAddressChanged, onBuildingChanged, onFloorChanged;
-  const _StepLocation({
-    required this.step, required this.onNext,
-    required this.address, required this.buildingNumber, required this.floor,
-    required this.onAddressChanged, required this.onBuildingChanged, required this.onFloorChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary),
-                      child: const Icon(Icons.location_on, color: AppColors.white, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('الموقع', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  height: 200,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: AppColors.darkBlue,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map, color: AppColors.white, size: 48),
-                        SizedBox(height: 8),
-                        Text('الخريطة', style: TextStyle(color: AppColors.white, fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text('حي الياسمين، الرياض، المملكة العربية السعودية',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _FormField(hint: 'أدخل عنوان العقار التفصيلي...', onChanged: onAddressChanged),
-          const SizedBox(height: 12),
-          Row(
+          _Card(
+            icon: Icons.help_outline, iconBg: AppColors.fieldBorder, title: 'معلومات العقار',
             children: [
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _InputLabel(text: 'رقم المبنى'),
-                  const SizedBox(height: 6),
-                  _FormField(hint: '12', keyboardType: TextInputType.number, onChanged: onBuildingChanged),
-                ],
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _InputLabel(text: 'الطابق'),
-                  const SizedBox(height: 6),
-                  _FormField(hint: '3', keyboardType: TextInputType.number, onChanged: onFloorChanged),
-                ],
-              )),
+              _InputLabel(text: 'اسم العقار'),
+              const SizedBox(height: 6),
+              _FormField(hint: 'مثال: شقة فاخرة في المعادي', onChanged: onNameChanged),
+              const SizedBox(height: 16),
+              _InputLabel(text: 'وصف العقار'),
+              const SizedBox(height: 6),
+              _FormField(hint: 'اكتب وصفاً مفصلاً للعقار...', maxLines: 4, onChanged: onDescriptionChanged),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: _DropdownColumn(label: 'نوع العقار', value: propertyType,
+                    items: const ['شقة', 'فيلا', 'مكتب', 'دوبلكس', 'استوديو', 'بنتهاوس', 'تجاري', 'مزرعة'], onChanged: onTypeChanged)),
+                const SizedBox(width: 12),
+                Expanded(child: _DropdownColumn(label: 'المدينة', value: propertyCity,
+                    items: const ['الرياض', 'جدة', 'الدمام', 'الخبر', 'مكة', 'المدينة', 'أبها', 'تبوك'], onChanged: onCityChanged)),
+              ]),
+              const SizedBox(height: 16),
+              _InputLabel(text: 'حالة التأثيث'),
+              const SizedBox(height: 6),
+              _DropdownField(value: furnishing, items: const ['مفروش', 'غير مفروش', 'شبه مفروش'], onChanged: onFurnishingChanged),
+              const SizedBox(height: 16),
+              _InputLabel(text: 'المساحة (م²)'),
+              const SizedBox(height: 6),
+              _FormField(hint: '120', keyboardType: TextInputType.number, onChanged: onAreaChanged),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: _CountField(label: 'غرف النوم', value: beds, onChanged: onBedsChanged)),
+                const SizedBox(width: 10),
+                Expanded(child: _CountField(label: 'الحمامات', value: baths, onChanged: onBathsChanged)),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: _CountField(label: 'المطابخ', value: kitchens, onChanged: onKitchensChanged)),
+                const SizedBox(width: 10),
+                Expanded(child: _CountField(label: 'الضيوف', value: guests, onChanged: onGuestsChanged)),
+              ]),
+              const SizedBox(height: 16),
+              _InputLabel(text: 'فترة الإيجار'),
+              const SizedBox(height: 6),
+              _DropdownField(value: period, items: const ['يومياً', 'شهرياً', 'سنوياً'], onChanged: onPeriodChanged),
+              const SizedBox(height: 16),
+              _InputLabel(text: 'الأسعار (SAR)'),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(child: _PriceField(label: 'يومي', value: dailyPrice, onChanged: onDailyPriceChanged)),
+                const SizedBox(width: 10),
+                Expanded(child: _PriceField(label: 'شهري', value: monthlyPrice, onChanged: onMonthlyPriceChanged)),
+                const SizedBox(width: 10),
+                Expanded(child: _PriceField(label: 'سنوي', value: yearlyPrice, onChanged: onYearlyPriceChanged)),
+              ]),
             ],
           ),
           const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: onNext),
+          _NextButton(label: 'التالي: الموقع', onPressed: onNext),
           const SizedBox(height: 30),
         ],
       ),
@@ -566,146 +447,348 @@ class _StepLocation extends StatelessWidget {
   }
 }
 
-// ───── Step 3: Photos ─────
-class _StepPhotos extends StatelessWidget {
-  final int step;
+// ═══════════════════════════════════════════════
+//  Step 2: Location + Map
+// ═══════════════════════════════════════════════
+
+/// الحصول على موقع الجهاز الحالي.
+Future<void> _pickCurrentLocation(BuildContext context, ValueChanged<LatLng> onPicked) async {
+  try {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null) {
+        onPicked(LatLng(lastPos.latitude, lastPos.longitude));
+        Get.snackbar('تم تحديد الموقع', 'تم استخدام آخر موقع معروف',
+            snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: Colors.white);
+        return;
+      }
+      Get.snackbar(
+          'الموقع غير متاح',
+          'يمكنك تحديد الموقع بالبحث عن العنوان',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFF1565C0),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 4));
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        Get.snackbar('الصلاحية مرفوضة', 'يرجى منح صلاحية الوصول للموقع',
+            snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFE65100), colorText: Colors.white);
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      Get.snackbar('الصلاحية مرفوضة نهائياً', 'افتح إعدادات التطبيق وفعّل صلاحية الموقع',
+          snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: Colors.white);
+      return;
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+    onPicked(LatLng(position.latitude, position.longitude));
+
+    Get.snackbar('تم تحديد الموقع', 'موقعك الحالي تم تحديده',
+        snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: Colors.white);
+  } catch (e) {
+    Get.snackbar('خطأ', 'تعذر الحصول على الموقع الحالي',
+        snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: Colors.white);
+  }
+}
+
+class _StepLocation extends StatefulWidget {
+  final String address, buildingNumber, floor;
+  final LatLng? selectedLocation;
+  final ValueChanged<String> onAddressChanged, onBuildingChanged, onFloorChanged;
+  final ValueChanged<LatLng> onLocationPicked;
   final VoidCallback onNext;
-  final bool hasMainImage;
-  final List<bool> extraImages;
-  final VoidCallback onAddMain;
-  final ValueChanged<int> onAddExtra;
-  const _StepPhotos({
-    required this.step, required this.onNext,
-    required this.hasMainImage, required this.extraImages,
-    required this.onAddMain, required this.onAddExtra,
+
+  const _StepLocation({
+    required this.address, required this.buildingNumber, required this.floor,
+    required this.selectedLocation,
+    required this.onAddressChanged, required this.onBuildingChanged, required this.onFloorChanged,
+    required this.onLocationPicked, required this.onNext,
   });
 
-  void _showPicker(BuildContext context, VoidCallback onSelect) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.fieldBorder, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            const Text('اختيار صورة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: AppColors.primary),
-              title: const Text('الكاميرا', style: TextStyle(fontSize: 14)),
-              onTap: () { Navigator.pop(context); onSelect(); },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: AppColors.primary),
-              title: const Text('المعرض', style: TextStyle(fontSize: 14)),
-              onTap: () { Navigator.pop(context); onSelect(); },
-            ),
-          ],
+  @override
+  State<_StepLocation> createState() => _StepLocationState();
+}
+
+class _StepLocationState extends State<_StepLocation> {
+  Timer? _debounce;
+  bool _searching = false;
+  final TextEditingController _addressCtl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _addressCtl.text = widget.address;
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _addressCtl.dispose();
+    super.dispose();
+  }
+
+  void _onAddressTyped(String value) {
+    widget.onAddressChanged(value);
+    _debounce?.cancel();
+    if (value.trim().length >= 3) {
+      _debounce = Timer(const Duration(milliseconds: 900), () {
+        _geocode(value.trim());
+      });
+    }
+  }
+
+  void _onSearch() {
+    final query = _addressCtl.text.trim();
+    if (query.isNotEmpty) {
+      _debounce?.cancel();
+      _geocode(query);
+    }
+  }
+
+  Future<void> _geocode(String query) async {
+    if (!mounted) return;
+    setState(() => _searching = true);
+    final coords = await LocationHelper.geocodeAddress(query);
+    if (!mounted) return;
+    setState(() => _searching = false);
+
+    if (coords != null) {
+      widget.onLocationPicked(coords);
+      Get.snackbar('تم تحديد الموقع', 'تم العثور على الإحداثيات بنجاح',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primary,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2));
+    } else {
+      Get.snackbar('لم يتم العثور', 'يمكنك فتح الخريطة لتحديد الموقع يدوياً',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFFF8F00),
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2));
+    }
+  }
+
+  Future<void> _openInteractiveMapPicker() async {
+    final result = await Navigator.push<MapLocationResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InteractiveMapPickerScreen(
+          initialLocation: widget.selectedLocation,
+          initialAddress: _addressCtl.text.isNotEmpty ? _addressCtl.text : null,
         ),
       ),
     );
+
+    if (result != null) {
+      widget.onLocationPicked(result.coordinates);
+      if (result.address != null && result.address!.isNotEmpty) {
+        _addressCtl.text = result.address!;
+        widget.onAddressChanged(result.address!);
+      }
+      if (mounted) setState(() {});
+    }
+  }
+
+  String _staticMapUrl(LatLng ll) {
+    final lat = ll.latitude.toStringAsFixed(5);
+    final lon = ll.longitude.toStringAsFixed(5);
+    return 'https://staticmap.openstreetmap.de/staticmap.php'
+        '?center=$lat,$lon&zoom=16&size=600x300&maptype=mapnik'
+        '&markers=$lat,$lon,red-pushpin';
+  }
+
+  Future<void> _handleNext() async {
+    if (widget.selectedLocation == null && _addressCtl.text.trim().isNotEmpty) {
+      final coords = await LocationHelper.geocodeAddress(_addressCtl.text.trim());
+      if (coords != null) {
+        widget.onLocationPicked(coords);
+      }
+    }
+    widget.onNext();
   }
 
   @override
   Widget build(BuildContext context) {
+    final selectedLocation = widget.selectedLocation;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.image, color: AppColors.primary, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('الصور', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: () => _showPicker(context, onAddMain),
-                  child: Container(
-                    height: 180,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: hasMainImage ? AppColors.primary.withValues(alpha: 0.1) : AppColors.fieldBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: hasMainImage ? AppColors.primary : AppColors.fieldBorder,
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: hasMainImage
-                          ? const Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.check_circle, color: AppColors.primary, size: 40),
-                                SizedBox(height: 8),
-                                Text('تم إضافة الصورة الرئيسية', style: TextStyle(fontSize: 14, color: AppColors.primary)),
-                              ],
-                            )
-                          : const Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.camera_alt, color: AppColors.grey, size: 40),
-                                SizedBox(height: 8),
-                                Text('أضف صورة رئيسية', style: TextStyle(fontSize: 14, color: AppColors.grey)),
-                              ],
-                            ),
-                    ),
+          _Card(
+            icon: Icons.location_on, iconBg: AppColors.primary, title: 'الموقع والخريطة',
+            children: [
+              // ── زر فتح الخريطة التفاعلية ──
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _openInteractiveMapPicker,
+                  icon: const Icon(Icons.map_outlined, size: 20, color: Colors.white),
+                  label: const Text(
+                    'تحديد الموقع على الخريطة التفاعلية',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 80,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: List.generate(4, (i) => GestureDetector(
-                      onTap: extraImages[i] ? null : () => _showPicker(context, () => onAddExtra(i)),
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 10),
-                        child: Container(
-                          width: 80, height: 80,
-                          decoration: BoxDecoration(
-                            color: extraImages[i] ? AppColors.primary.withValues(alpha: 0.1) : AppColors.fieldBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: extraImages[i] ? AppColors.primary : AppColors.fieldBorder,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: extraImages[i]
-                              ? const Icon(Icons.check_circle, color: AppColors.primary, size: 28)
-                              : const Icon(Icons.add, color: AppColors.grey, size: 28),
+              ),
+              const SizedBox(height: 12),
+
+              // ── معاينة الخريطة أو حقل البحث ──
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 240,
+                  width: double.infinity,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: _openInteractiveMapPicker,
+                          child: selectedLocation != null
+                              ? Image.network(
+                                  _staticMapUrl(selectedLocation),
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (c, child, p) => p == null
+                                      ? child
+                                      : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                  errorBuilder: (c, e, s) => Container(
+                                    color: const Color(0xFFE8F5E9),
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.location_on, size: 48, color: AppColors.primary),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            '${selectedLocation.latitude.toStringAsFixed(4)}, ${selectedLocation.longitude.toStringAsFixed(4)}',
+                                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          const Text('اضغط لتغيير الموقع على الخريطة', style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  color: const Color(0xFFF5F5F5),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.add_location_alt_outlined, size: 48, color: AppColors.primary),
+                                        const SizedBox(height: 8),
+                                        const Text('اضغط هنا لفتح الخريطة واختيار الموقع',
+                                            style: TextStyle(color: AppColors.darkText, fontWeight: FontWeight.w600, fontSize: 13)),
+                                        const SizedBox(height: 4),
+                                        Text('أو اكتب العنوان في مربع البحث أعلاه',
+                                            style: TextStyle(color: AppColors.grey.withValues(alpha: 0.8), fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                         ),
                       ),
-                    )),
+                      Positioned(
+                        top: 10, left: 10, right: 10,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 2))],
+                          ),
+                          child: TextField(
+                            controller: _addressCtl,
+                            onChanged: _onAddressTyped,
+                            onSubmitted: (_) => _onSearch(),
+                            textDirection: TextDirection.rtl,
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              hintText: 'ابحث عن العنوان أو الحي...',
+                              hintTextDirection: TextDirection.rtl,
+                              hintStyle: TextStyle(fontSize: 13, color: AppColors.grey.withValues(alpha: 0.5)),
+                              prefixIcon: _searching
+                                  ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                                  : IconButton(
+                                      icon: const Icon(Icons.search, color: AppColors.primary, size: 20),
+                                      onPressed: _onSearch,
+                                    ),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.my_location, color: AppColors.primary, size: 20),
+                                onPressed: () => _pickCurrentLocation(context, (ll) {
+                                  widget.onLocationPicked(ll);
+                                  LocationHelper.reverseGeocode(ll.latitude, ll.longitude).then((addr) {
+                                    if (addr != null && mounted) {
+                                      _addressCtl.text = addr;
+                                      widget.onAddressChanged(addr);
+                                    }
+                                  });
+                                }),
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (selectedLocation != null)
+                        Positioned(
+                          bottom: 10, left: 10, right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle, color: Colors.white, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(
+                                  'تم التحديد: ${selectedLocation.latitude.toStringAsFixed(4)}, ${selectedLocation.longitude.toStringAsFixed(4)}',
+                                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+                                )),
+                                const Icon(Icons.edit, color: Colors.white, size: 14),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const _InputLabel(text: 'رقم المبنى'),
+                  const SizedBox(height: 6),
+                  _FormField(hint: '12', keyboardType: TextInputType.number, onChanged: widget.onBuildingChanged, initialValue: widget.buildingNumber),
+                ])),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const _InputLabel(text: 'الطابق'),
+                  const SizedBox(height: 6),
+                  _FormField(hint: '3', keyboardType: TextInputType.number, onChanged: widget.onFloorChanged, initialValue: widget.floor),
+                ])),
+              ]),
+            ],
           ),
           const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: onNext),
+          _NextButton(label: 'التالي: المرافق', onPressed: _handleNext),
           const SizedBox(height: 30),
         ],
       ),
@@ -713,15 +796,19 @@ class _StepPhotos extends StatelessWidget {
   }
 }
 
-// ───── Step 4: Amenities ─────
+// ═══════════════════════════════════════════════
+//  Step 3: Amenities (Categorized)
+// ═══════════════════════════════════════════════
+
 class _StepAmenities extends StatelessWidget {
-  final int step;
+  final Set<String> primaryAmenities, secondaryAmenities, kitchenAmenities, bathroomAmenities, propertyFeatures;
+  final void Function(Set<String>, String) onToggle;
   final VoidCallback onNext;
-  final Set<String> selectedAmenities;
-  final ValueChanged<String> onToggle;
+
   const _StepAmenities({
-    required this.step, required this.onNext,
-    required this.selectedAmenities, required this.onToggle,
+    required this.primaryAmenities, required this.secondaryAmenities,
+    required this.kitchenAmenities, required this.bathroomAmenities,
+    required this.propertyFeatures, required this.onToggle, required this.onNext,
   });
 
   @override
@@ -730,55 +817,47 @@ class _StepAmenities extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.grid_view, color: AppColors.primary, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('المرافق', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: (const [
-                    {'icon': Icons.wifi, 'label': 'إنترنت'},
-                    {'icon': Icons.fitness_center, 'label': 'نادي رياضي'},
-                    {'icon': Icons.pool, 'label': 'مسبح'},
-                    {'icon': Icons.local_parking, 'label': 'موقف'},
-                    {'icon': Icons.security, 'label': 'أمن 24/7'},
-                    {'icon': Icons.elevator, 'label': 'مصعد'},
-                  ]).map((a) {
-                    final label = a['label'] as String;
-                    final isSelected = selectedAmenities.contains(label);
-                    return _AmenityChip(
-                      icon: a['icon'] as IconData,
-                      label: label,
-                      isSelected: isSelected,
-                      onTap: () => onToggle(label),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+          _Card(
+            icon: Icons.grid_view, iconBg: AppColors.primary, title: 'المرافق والمميزات',
+            children: [
+              _AmenitySection(
+                title: 'المرافق الأساسية',
+                icon: Icons.star_outline,
+                items: const ['WiFi', 'Parking', 'AC', 'Elevator', 'Gym', 'Pool', 'Security', 'Laundry'],
+                selected: primaryAmenities, onToggle: onToggle,
+              ),
+              const SizedBox(height: 16),
+              _AmenitySection(
+                title: 'المرافق الثانوية',
+                icon: Icons.add_circle_outline,
+                items: const ['Storage', 'Garden', 'BBQ', 'Playground', 'Concierge', 'Balcony'],
+                selected: secondaryAmenities, onToggle: onToggle,
+              ),
+              const SizedBox(height: 16),
+              _AmenitySection(
+                title: 'مرافق المطبخ',
+                icon: Icons.kitchen,
+                items: const ['Oven', 'Refrigerator', 'Microwave', 'Dishwasher', 'Washing Machine', 'Stove'],
+                selected: kitchenAmenities, onToggle: onToggle,
+              ),
+              const SizedBox(height: 16),
+              _AmenitySection(
+                title: 'مرافق الحمام',
+                icon: Icons.bathtub_outlined,
+                items: const ['Towels', 'Hair Dryer', 'Shower', 'Bathtub', 'Heated Floor'],
+                selected: bathroomAmenities, onToggle: onToggle,
+              ),
+              const SizedBox(height: 16),
+              _AmenitySection(
+                title: 'مميزات العقار',
+                icon: Icons.home_outlined,
+                items: const ['City view', 'Sea view', 'Balcony', 'Terrace', 'Storage Room', 'Furnished', 'Smart Home'],
+                selected: propertyFeatures, onToggle: onToggle,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: onNext),
+          _NextButton(label: 'التالي: المراجعة', onPressed: onNext),
           const SizedBox(height: 30),
         ],
       ),
@@ -786,235 +865,264 @@ class _StepAmenities extends StatelessWidget {
   }
 }
 
-class _AmenityChip extends StatelessWidget {
+class _AmenitySection extends StatelessWidget {
+  final String title;
   final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-  const _AmenityChip({required this.icon, required this.label, required this.isSelected, required this.onTap});
+  final List<String> items;
+  final Set<String> selected;
+  final void Function(Set<String>, String) onToggle;
+
+  const _AmenitySection({
+    required this.title, required this.icon, required this.items,
+    required this.selected, required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : AppColors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? AppColors.primary : AppColors.fieldBorder),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8, runSpacing: 8,
+          children: items.map((item) {
+            final isSelected = selected.contains(item);
+            return GestureDetector(
+              onTap: () => onToggle(selected, item),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : AppColors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: isSelected ? AppColors.primary : AppColors.fieldBorder),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                        size: 18, color: isSelected ? AppColors.primary : AppColors.grey),
+                    const SizedBox(width: 6),
+                    Text(item, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+                        color: isSelected ? AppColors.primary : AppColors.grey)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: isSelected ? AppColors.primary : AppColors.primary),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 13, color: isSelected ? AppColors.primary : AppColors.grey)),
-            const SizedBox(width: 12),
-            Icon(
-              isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-              size: 20,
-              color: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.4),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
 
-// ───── Step 5: Calendar ─────
-class _StepAvailability extends StatelessWidget {
-  final int step;
+// ═══════════════════════════════════════════════
+//  Step 4: Photos
+// ═══════════════════════════════════════════════
+
+class _StepPhotos extends StatelessWidget {
+  final List<String> selectedPaths;
+  final String? selectedVideoPath;
+  final VoidCallback onAdd;
+  final VoidCallback onAddVideo;
+  final ValueChanged<int> onRemove;
+  final VoidCallback onRemoveVideo;
   final VoidCallback onNext;
-  final int currentMonth, currentYear;
-  final Set<int> bookedDays, availableDays;
-  final int? selectedDay;
-  final VoidCallback onPrevMonth, onNextMonth;
-  final ValueChanged<int> onDayTap;
-  const _StepAvailability({
-    required this.step, required this.onNext,
-    required this.currentMonth, required this.currentYear,
-    required this.bookedDays, required this.availableDays,
-    required this.selectedDay, required this.onPrevMonth,
-    required this.onNextMonth, required this.onDayTap,
+
+  const _StepPhotos({
+    required this.selectedPaths, this.selectedVideoPath,
+    required this.onAdd, required this.onAddVideo,
+    required this.onRemove, required this.onRemoveVideo,
+    required this.onNext,
   });
-
-  static const _monthNames = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
-  ];
-
-  String get _monthLabel => '${_monthNames[currentMonth - 1]} $currentYear';
 
   @override
   Widget build(BuildContext context) {
-    final daysInMonth = DateTime(currentYear, currentMonth + 1, 0).day;
-    final firstWeekday = DateTime(currentYear, currentMonth, 1).weekday;
-    final offset = (firstWeekday + 1) % 7;
-    final weeksNeeded = ((daysInMonth + offset - 1) / 7).ceil();
-
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.fieldBorder),
-                      child: const Icon(Icons.calendar_today, color: AppColors.grey, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('التقويم', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(8),
+          _Card(
+            icon: Icons.photo_library_outlined, iconBg: AppColors.primary, title: 'صور وفيديو العقار',
+            children: [
+              // ── زر إضافة صور ──
+              GestureDetector(
+                onTap: onAdd,
+                child: Container(
+                  width: double.infinity,
+                  height: 100,
                   decoration: BoxDecoration(
                     color: AppColors.fieldBg,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 2),
                   ),
-                  child: Column(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
+                      Icon(Icons.add_photo_alternate_outlined, size: 32, color: AppColors.primary.withValues(alpha: 0.6)),
+                      const SizedBox(width: 10),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          GestureDetector(onTap: onPrevMonth, child: const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Icon(Icons.chevron_right, color: AppColors.primary, size: 28),
-                          )),
-                          const Spacer(),
-                          Text(_monthLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.darkBlue)),
-                          const Spacer(),
-                          GestureDetector(onTap: onNextMonth, child: const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Icon(Icons.chevron_left, color: AppColors.primary, size: 28),
-                          )),
+                          Text('إضافة صور', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary.withValues(alpha: 0.8))),
+                          Text('اختر عدة صور مرة واحدة', style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.5))),
                         ],
-                      ),
-                      const Divider(height: 1, color: AppColors.fieldBorder),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'].map((d) =>
-                            Expanded(child: Center(child: Text(d, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.grey))))
-                          ).toList(),
-                        ),
-                      ),
-                      const Divider(height: 1, color: AppColors.fieldBorder),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Column(
-                          children: List.generate(weeksNeeded, (w) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: List.generate(7, (d) {
-                                final day = w * 7 + d - offset + 1;
-                                if (day < 1 || day > daysInMonth) return const Expanded(child: SizedBox(height: 40));
-                                final isBooked = bookedDays.contains(day);
-                                final isAvailable = availableDays.contains(day);
-                                final isSelected = day == selectedDay;
-                                Color bg;
-                                Color textColor;
-                                if (isSelected) {
-                                  bg = AppColors.primary;
-                                  textColor = AppColors.white;
-                                } else if (isBooked) {
-                                  bg = const Color(0xFFFFCDD2);
-                                  textColor = const Color(0xFFC62828);
-                                } else if (isAvailable) {
-                                  bg = const Color(0xFFC8E6C9);
-                                  textColor = const Color(0xFF2E7D32);
-                                } else {
-                                  bg = Colors.transparent;
-                                  textColor = AppColors.darkText;
-                                }
-                                return Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => onDayTap(day),
-                                    child: Container(
-                                      height: 40,
-                                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text('$day', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textColor)),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          )),
-                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
+              ),
+              const SizedBox(height: 12),
+
+              // ── زر إضافة فيديو ──
+              GestureDetector(
+                onTap: onAddVideo,
+                child: Container(
+                  width: double.infinity,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: selectedVideoPath != null
+                        ? AppColors.primary.withValues(alpha: 0.05)
+                        : AppColors.fieldBg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selectedVideoPath != null
+                          ? AppColors.primary
+                          : AppColors.primary.withValues(alpha: 0.15),
+                      width: selectedVideoPath != null ? 2 : 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.videocam_outlined, size: 32,
+                          color: selectedVideoPath != null
+                              ? AppColors.primary
+                              : AppColors.primary.withValues(alpha: 0.4)),
+                      const SizedBox(width: 10),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(selectedVideoPath != null ? 'تم اختيار الفيديو' : 'إضافة فيديو',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                                  color: selectedVideoPath != null ? AppColors.primary : AppColors.primary.withValues(alpha: 0.6))),
+                          Text(selectedVideoPath != null ? 'حد أقصى 50 ميجا' : 'اختياري — فيديو واحد فقط',
+                              style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.5))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── عرض الصور المختارة ──
+              if (selectedPaths.isNotEmpty) ...[
+                Row(
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                    Text('الصور (${selectedPaths.length})',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.black)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 90,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: selectedPaths.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (_, i) => Stack(
                       children: [
-                        Container(width: 12, height: 12, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF2E7D32))),
-                        const SizedBox(width: 6),
-                        const Text('متاح', style: TextStyle(fontSize: 12, color: AppColors.grey)),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(File(selectedPaths[i]),
+                              width: 90, height: 90, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          top: 4, left: 4,
+                          child: GestureDetector(
+                            onTap: () => onRemove(i),
+                            child: Container(
+                              width: 22, height: 22,
+                              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(width: 12, height: 12, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFC62828))),
-                        const SizedBox(width: 6),
-                        const Text('محجوز', style: TextStyle(fontSize: 12, color: AppColors.grey)),
-                      ],
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(width: 12, height: 12, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary)),
-                        const SizedBox(width: 6),
-                        const Text('محدد', style: TextStyle(fontSize: 12, color: AppColors.grey)),
-                      ],
+                  ),
+                ),
+              ],
+
+              // ── عرض الفيديو المختار ──
+              if (selectedVideoPath != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.videocam, size: 20, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    const Text('الفيديو المختار', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.black)),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: onRemoveVideo,
+                      child: const Text('إزالة', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
-                if (selectedDay != null) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(child: Text(
-                      '${_monthNames[currentMonth - 1]} $selectedDay — ${bookedDays.contains(selectedDay!) ? 'محجوز' : availableDays.contains(selectedDay!) ? 'متاح' : 'غير محدد'}',
-                      style: const TextStyle(fontSize: 14, color: AppColors.white, fontWeight: FontWeight.bold),
-                    )),
+                const SizedBox(height: 8),
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      const Icon(Icons.play_circle_outline, color: AppColors.primary, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(selectedVideoPath!.split('/').last,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13, color: AppColors.black)),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            ),
+
+              // ── رسالة فارغة ──
+              if (selectedPaths.isEmpty && selectedVideoPath == null) ...[
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Column(
+                      children: [
+                        Icon(Icons.photo_library_outlined, size: 40, color: AppColors.grey.withValues(alpha: 0.3)),
+                        const SizedBox(height: 8),
+                        Text('اختر صوراً وفيديو للعقار',
+                            style: TextStyle(fontSize: 13, color: AppColors.grey.withValues(alpha: 0.5))),
+                        const SizedBox(height: 4),
+                        Text('كلها اختياري — يمكنك إضافة الوسائط لاحقاً',
+                            style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.4))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: onNext),
+          _NextButton(label: 'التالي: المراجعة', onPressed: onNext),
           const SizedBox(height: 30),
         ],
       ),
@@ -1022,79 +1130,73 @@ class _StepAvailability extends StatelessWidget {
   }
 }
 
-// ───── Step 6: Review ─────
+// ═══════════════════════════════════════════════
+//  Step 5: Review + Publish
+// ═══════════════════════════════════════════════
+
 class _StepReview extends StatelessWidget {
-  final int step;
   final VoidCallback onPublish;
   final bool publishing;
   final String propertyName, propertyType, propertyCity, furnishing;
-  final String area, beds, baths, dailyPrice, monthlyPrice, yearlyPrice;
-  final String address, amenities;
+  final String area, beds, baths, kitchens, guests;
+  final String dailyPrice, monthlyPrice, yearlyPrice, period;
+  final String address;
+  final Set<String> primaryAmenities, secondaryAmenities, kitchenAmenities, bathroomAmenities, propertyFeatures;
+  final bool locationPicked;
+
   const _StepReview({
-    required this.step, required this.onPublish, required this.publishing,
+    required this.onPublish, required this.publishing,
     required this.propertyName, required this.propertyType,
     required this.propertyCity, required this.furnishing,
-    required this.area, required this.beds, required this.baths,
-    required this.dailyPrice, required this.monthlyPrice, required this.yearlyPrice,
-    required this.address, required this.amenities,
+    required this.area, required this.beds, required this.baths, required this.kitchens, required this.guests,
+    required this.dailyPrice, required this.monthlyPrice, required this.yearlyPrice, required this.period,
+    required this.address,
+    required this.primaryAmenities, required this.secondaryAmenities,
+    required this.kitchenAmenities, required this.bathroomAmenities, required this.propertyFeatures,
+    required this.locationPicked,
   });
 
   @override
   Widget build(BuildContext context) {
+    final allAmenities = {...primaryAmenities, ...secondaryAmenities, ...kitchenAmenities, ...bathroomAmenities};
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.checklist, color: AppColors.primary, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('مراجعة ونشر', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                _ReviewRow(label: 'اسم العقار', value: propertyName.isEmpty ? 'لم يتم الإدخال' : propertyName),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'نوع العقار', value: propertyType),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'المدينة', value: propertyCity),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'التأثيث', value: furnishing),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'المساحة', value: area.isEmpty ? 'لم يتم الإدخال' : '$area م²'),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'الغرف', value: '${beds.isEmpty ? '0' : beds} غرف / ${baths.isEmpty ? '0' : baths} حمام'),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'الأسعار', value: _pricesSummary()),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'الموقع', value: address.isEmpty ? 'لم يتم الإدخال' : address),
-                const Divider(height: 20, color: AppColors.fieldBorder),
-                _ReviewRow(label: 'المرافق', value: amenities),
-              ],
-            ),
+          _Card(
+            icon: Icons.checklist, iconBg: AppColors.primary, title: 'مراجعة ونشر',
+            children: [
+              _ReviewRow(label: 'اسم العقار', value: propertyName.isEmpty ? '—' : propertyName),
+              _divider, _ReviewRow(label: 'النوع', value: propertyType),
+              _divider, _ReviewRow(label: 'المدينة', value: propertyCity),
+              _divider, _ReviewRow(label: 'التأثيث', value: furnishing),
+              _divider, _ReviewRow(label: 'المساحة', value: area.isEmpty ? '—' : '$area م²'),
+              _divider, _ReviewRow(label: 'الغرف/حمامات', value: '$beds غرف / $baths حمام${kitchens.isNotEmpty ? ' / $kitchens مطبخ' : ''}'),
+              _divider, _ReviewRow(label: 'الضيوف', value: guests.isEmpty ? '—' : guests),
+              _divider, _ReviewRow(label: 'الفترة', value: period),
+              _divider, _ReviewRow(label: 'الأسعار', value: _pricesSummary()),
+              _divider, _ReviewRow(label: 'الموقع', value: address.isEmpty ? '—' : address),
+              _divider, _ReviewRow(label: 'الخريطة', value: locationPicked ? 'تم التحديد ✓' : 'لم يتم التحديد'),
+              _divider, _ReviewRow(label: 'المرافق (${allAmenities.length})', value: allAmenities.isEmpty ? '—' : allAmenities.join('، ')),
+            ],
           ),
           const SizedBox(height: 24),
-          _NextButton(step: step, onPressed: publishing ? null : onPublish, loading: publishing),
+          _NextButton(
+            label: publishing ? '' : 'نشر العقار',
+            onPressed: publishing ? null : onPublish,
+            loading: publishing,
+          ),
           const SizedBox(height: 30),
         ],
       ),
     );
   }
+
+  static const _divider = Padding(
+    padding: EdgeInsets.symmetric(vertical: 6),
+    child: Divider(height: 1, color: AppColors.fieldBorder),
+  );
 
   String _pricesSummary() {
     final parts = <String>[
@@ -1102,120 +1204,69 @@ class _StepReview extends StatelessWidget {
       if (monthlyPrice.isNotEmpty) 'شهري: $monthlyPrice',
       if (yearlyPrice.isNotEmpty) 'سنوي: $yearlyPrice',
     ];
-    return parts.isEmpty ? 'لم يتم الإدخال' : parts.join(' • ');
+    return parts.isEmpty ? '—' : parts.join(' • ');
   }
 }
 
-class _ReviewRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _ReviewRow({required this.label, required this.value});
+// ═══════════════════════════════════════════════
+//  Shared Widgets
+// ═══════════════════════════════════════════════
+
+class _Card extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final String title;
+  final List<Widget> children;
+
+  const _Card({required this.icon, required this.iconBg, required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 13, color: AppColors.grey)),
-        const Spacer(),
-        Flexible(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText), textAlign: TextAlign.left)),
-      ],
-    );
-  }
-}
-
-class _NextButton extends StatelessWidget {
-  final int step;
-  final VoidCallback? onPressed;
-  final bool loading;
-  const _NextButton({required this.step, this.onPressed, this.loading = false});
-
-  String get _label {
-    const labels = ['الموقع', 'الصور', 'المرافق', 'التقويم', 'المراجعة'];
-    if (step == 6) return 'نشر العقار';
-    if (step >= 1 && step <= 5) return 'التالي: ${labels[step - 1]}';
-    return 'التالي';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity, height: 52,
-      child: ElevatedButton(
-        onPressed: loading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.white,
-          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
-          disabledForegroundColor: AppColors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: 4,
-          shadowColor: AppColors.primary.withValues(alpha: 0.3),
-        ),
-          child: loading
-              ? const SizedBox(
-                  width: 24, height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.white),
-                )
-              : FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(_label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 32, height: 32,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: iconBg),
+              child: Icon(icon, color: iconBg == AppColors.fieldBorder ? AppColors.grey : AppColors.white, size: 18)),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+        ]),
+        const SizedBox(height: 20),
+        ...children,
+      ]),
     );
   }
 }
 
-// ───── Shared widgets ─────
-class _CountField extends StatelessWidget {
-  final String label;
-  final String value;
+class _FormField extends StatelessWidget {
+  final String hint;
+  final int maxLines;
+  final TextInputType? keyboardType;
   final ValueChanged<String> onChanged;
-  const _CountField({required this.label, required this.value, required this.onChanged});
+  final String? initialValue;
+  const _FormField({required this.hint, this.maxLines = 1, this.keyboardType, required this.onChanged, this.initialValue});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.darkText)),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.fieldBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.fieldBorder),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  child: Text(value.isEmpty ? '0' : value,
-                    style: const TextStyle(fontSize: 14, color: AppColors.darkText), textAlign: TextAlign.center),
-                ),
-              ),
-              Column(
-                children: [
-                  InkWell(
-                    onTap: () => onChanged(((int.tryParse(value) ?? 0) + 1).toString()),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(Icons.keyboard_arrow_up, size: 20, color: AppColors.primary),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => onChanged(((int.tryParse(value) ?? 0) - 1).clamp(0, 99).toString()),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(Icons.keyboard_arrow_down, size: 20, color: AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: maxLines > 1 ? 12 : 4),
+      decoration: BoxDecoration(color: AppColors.fieldBg, borderRadius: BorderRadius.circular(12)),
+      child: TextField(
+        maxLines: maxLines, keyboardType: keyboardType, onChanged: onChanged,
+        controller: initialValue != null ? TextEditingController(text: initialValue) : null,
+        textDirection: TextDirection.rtl,
+        decoration: InputDecoration(
+          border: InputBorder.none, hintText: hint, hintTextDirection: TextDirection.rtl,
+          hintStyle: TextStyle(fontSize: 14, color: AppColors.grey.withValues(alpha: 0.5)),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1223,42 +1274,9 @@ class _CountField extends StatelessWidget {
 class _InputLabel extends StatelessWidget {
   final String text;
   const _InputLabel({required this.text});
-
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkText));
-  }
-}
-
-class _FormField extends StatelessWidget {
-  final String hint;
-  final int? maxLines;
-  final TextInputType? keyboardType;
-  final ValueChanged<String>? onChanged;
-  const _FormField({required this.hint, this.maxLines, this.keyboardType, this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.fieldBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.fieldBorder),
-      ),
-      child: TextField(
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(fontSize: 14, color: AppColors.grey),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-      ),
-    );
+    return Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText));
   }
 }
 
@@ -1270,48 +1288,186 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(color: AppColors.fieldBg, borderRadius: BorderRadius.circular(12)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value, isExpanded: true,
+          items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
+          onChanged: (v) { if (v != null) onChanged(v); },
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownColumn extends StatelessWidget {
+  final String label, value;
+  final List<String> items;
+  final ValueChanged<String> onChanged;
+  const _DropdownColumn({required this.label, required this.value, required this.items, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _InputLabel(text: label),
+      const SizedBox(height: 6),
+      _DropdownField(value: value, items: items, onChanged: onChanged),
+    ]);
+  }
+}
+
+class _CountField extends StatelessWidget {
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _CountField({required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkText)),
+      const SizedBox(height: 6),
+      Container(
+        decoration: BoxDecoration(color: AppColors.fieldBg, borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(children: [
+          GestureDetector(
+            onTap: () {
+              final n = int.tryParse(value) ?? 0;
+              if (n > 0) onChanged('${n - 1}');
+            },
+            child: Container(width: 28, height: 28,
+                decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.fieldBorder)),
+                child: const Icon(Icons.remove, size: 16, color: AppColors.grey)),
           ),
-          builder: (_) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.fieldBorder, borderRadius: BorderRadius.circular(2))),
-                    const SizedBox(height: 12),
-                    ...items.map((item) => ListTile(
-                      title: Text(item, style: TextStyle(fontSize: 14, color: item == value ? AppColors.primary : AppColors.darkText)),
-                      trailing: item == value ? const Icon(Icons.check, color: AppColors.primary, size: 20) : null,
-                      onTap: () { Navigator.pop(context); onChanged(item); },
-                    )),
-                  ],
+          Expanded(child: Center(
+            child: value.isEmpty
+                ? const Text('—', style: TextStyle(fontSize: 14, color: AppColors.grey))
+                : Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+          )),
+          GestureDetector(
+            onTap: () {
+              final n = int.tryParse(value) ?? 0;
+              onChanged('${n + 1}');
+            },
+            child: Container(width: 28, height: 28,
+                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                child: const Icon(Icons.add, size: 16, color: AppColors.primary)),
+          ),
+        ]),
+      ),
+    ]);
+  }
+}
+
+class _PriceField extends StatefulWidget {
+  final String label, value;
+  final ValueChanged<String> onChanged;
+  const _PriceField({required this.label, required this.value, required this.onChanged});
+
+  @override
+  State<_PriceField> createState() => _PriceFieldState();
+}
+
+class _PriceFieldState extends State<_PriceField> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PriceField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && _ctrl.text != widget.value) {
+      _ctrl.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(widget.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkText)),
+      const SizedBox(height: 6),
+      Container(
+        decoration: BoxDecoration(color: AppColors.fieldBg, borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                keyboardType: TextInputType.number,
+                onChanged: widget.onChanged,
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.darkText),
+                decoration: InputDecoration(
+                  border: InputBorder.none, hintText: '0', hintTextDirection: TextDirection.rtl,
+                  hintStyle: TextStyle(fontSize: 15, color: AppColors.grey.withValues(alpha: 0.4)),
+                  isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
             ),
-          ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.fieldBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.fieldBorder),
-        ),
-        child: Row(
-          children: [
-            Text(value, style: const TextStyle(fontSize: 14, color: AppColors.darkText)),
-            const Spacer(),
-            const Icon(Icons.arrow_drop_down, color: AppColors.grey),
+            Text('SAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.grey.withValues(alpha: 0.6))),
           ],
         ),
+      ),
+    ]);
+  }
+}
+
+class _ReviewRow extends StatelessWidget {
+  final String label, value;
+  const _ReviewRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 13, color: AppColors.grey)),
+        const Spacer(),
+        Flexible(child: Text(value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText),
+            textAlign: TextAlign.left)),
+      ]),
+    );
+  }
+}
+
+class _NextButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final bool loading;
+  const _NextButton({required this.label, this.onPressed, this.loading = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity, height: 52,
+      child: ElevatedButton(
+        onPressed: loading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary, foregroundColor: AppColors.white,
+          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 4, shadowColor: AppColors.primary.withValues(alpha: 0.3),
+        ),
+        child: loading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.white))
+            : FittedBox(fit: BoxFit.scaleDown,
+                child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
       ),
     );
   }

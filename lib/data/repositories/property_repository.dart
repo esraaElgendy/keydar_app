@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/constants/app_config.dart';
 import '../../models/property.dart';
 import '../models/api_property.dart';
@@ -45,6 +48,34 @@ class PropertyRepository {
       throw const FormatException('استجابة غير صالحة');
     }
     return ApiPropertyDetailResponse.fromJson(data).toProperty();
+  }
+
+  /// جلب صور العقار من endpoint مخصص — يرجع قائمة src URLs.
+  Future<List<String>> fetchPropertyImages(int propertyId) async {
+    try {
+      final res = await _api.get(AppConfig.propertyImages(propertyId));
+      final data = res.data;
+      if (data is! Map<String, dynamic>) return const [];
+      final raw = data['images'];
+      if (raw is! List) return const [];
+      final urls = <String>[];
+      for (final e in raw) {
+        String? src;
+        if (e is String && e.trim().isNotEmpty) {
+          src = e;
+        } else if (e is Map) {
+          final s = e['src'];
+          if (s is String && s.trim().isNotEmpty) src = s;
+        }
+        if (src != null) {
+          final full = AppConfig.assetUrl(src);
+          if (full.isNotEmpty) urls.add(full);
+        }
+      }
+      return urls;
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// تقييمات عقار مع الترقيم (صفحة واحدة).
@@ -119,6 +150,7 @@ class PropertyRepository {
     required int baths,
     required int kitchens,
     required int guests,
+    String? address,
     String? floor,
     String? buildingNumber,
     List<String> amenities = const [],
@@ -128,7 +160,16 @@ class PropertyRepository {
     List<String> bathroomAmenities = const [],
     List<String> propertyFeatures = const [],
     String cancellationPolicy = 'Flexible',
+    double? latitude,
+    double? longitude,
   }) async {
+    debugPrint('📤 Creating property at ${AppConfig.ownerProperties}');
+    debugPrint('📦 Body: ${jsonEncode({
+      'title': title,
+      'property_type': propertyType,
+      'status': status,
+      'period': period,
+    })}');
     final res = await _api.post(
       AppConfig.ownerProperties,
       body: {
@@ -146,6 +187,7 @@ class PropertyRepository {
         'baths': baths,
         'kitchens': kitchens,
         'guests': guests,
+        if (address != null && address.isNotEmpty) 'address': address,
         if (floor != null && floor.isNotEmpty) 'floor': floor,
         if (buildingNumber != null && buildingNumber.isNotEmpty)
           'building_number': buildingNumber,
@@ -156,13 +198,84 @@ class PropertyRepository {
         'bathroom_amenities': bathroomAmenities,
         'property_features': propertyFeatures,
         'cancellation_policy': cancellationPolicy,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       },
     );
+    debugPrint('📥 Create property response: ${res.statusCode} - ${res.data}');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw const FormatException('استجابة غير صالحة');
     }
-    return ApiPropertyDetailResponse.fromJson(data).toProperty();
+    try {
+      return ApiPropertyDetailResponse.fromJson(data).toProperty();
+    } catch (_) {
+      if (data['id'] != null) {
+        return ApiProperty.fromJson(Map<String, dynamic>.from(data)).toProperty();
+      }
+      rethrow;
+    }
+  }
+
+  // ===== Owner - Upload Images =====
+
+  /// رفع صور العقار (multipart/form-data).
+  ///
+  /// [propertyId] معرّف العقار.
+  /// [files] قائمة مسارات الصور المحلية.
+  /// تُرجع قائمة ببيانات الصور المرفوعة.
+  Future<List<UploadedImage>> uploadPropertyImages({
+    required int propertyId,
+    required List<String> files,
+  }) async {
+    final multipartFiles = await Future.wait(
+      files.map((path) => MultipartFile.fromFile(path, filename: path.split('/').last)),
+    );
+
+    debugPrint('📤 Uploading ${files.length} images to ${AppConfig.ownerPropertyImages(propertyId)}');
+    final res = await _api.upload(
+      AppConfig.ownerPropertyImages(propertyId),
+      files: multipartFiles,
+      fieldName: 'images[]',
+    );
+    debugPrint('📥 Upload response: ${res.data}');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) return const [];
+
+    final imagesRaw = data['images'];
+    if (imagesRaw is! List) return const [];
+
+    return imagesRaw
+        .whereType<Map>()
+        .map((e) => UploadedImage.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  /// حذف صورة من العقار.
+  Future<bool> deletePropertyImage({
+    required int propertyId,
+    required int imageId,
+  }) async {
+    final res = await _api.delete(AppConfig.ownerPropertyImage(propertyId, imageId));
+    final data = res.data;
+    if (data is Map<String, dynamic>) return data['success'] == true;
+    return false;
+  }
+
+  /// رفع فيديو العقار (multipart).
+  Future<bool> uploadPropertyVideo({
+    required int propertyId,
+    required String filePath,
+  }) async {
+    final file = await MultipartFile.fromFile(filePath, filename: filePath.split('/').last);
+    final res = await _api.upload(
+      AppConfig.ownerPropertyVideo(propertyId),
+      files: [file],
+      fieldName: 'video',
+    );
+    final data = res.data;
+    if (data is Map<String, dynamic>) return data['success'] == true;
+    return false;
   }
 
   // ===== Owner - My Properties =====
@@ -193,6 +306,11 @@ class PropertyRepository {
       throw const FormatException('استجابة غير صالحة');
     }
     return ApiPropertyDetailResponse.fromJson(data).toProperty();
+  }
+
+  /// حذف عقار مالك (DELETE `/owner/properties/{id}`).
+  Future<void> deleteOwnerProperty({required int id}) async {
+    await _api.delete(AppConfig.ownerPropertyDetail(id));
   }
 
   /// تغيير حالة عقار المالك (PUT `/owner/properties/{id}/status`).
@@ -236,6 +354,8 @@ class PropertyRepository {
     List<String>? kitchenAmenities,
     List<String>? bathroomAmenities,
     List<String>? propertyFeatures,
+    double? latitude,
+    double? longitude,
   }) async {
     final res = await _api.put(
       AppConfig.ownerPropertyDetail(id),
@@ -262,6 +382,8 @@ class PropertyRepository {
         'bathroom_amenities': bathroomAmenities ?? current.bathroomAmenities,
         'property_features': propertyFeatures ?? current.features,
         'cancellation_policy': 'Flexible',
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       },
     );
     final data = res.data;
@@ -288,6 +410,23 @@ class PropertyRepository {
     return raw.whereType<Map>().map((e) {
       final j = Map<String, dynamic>.from(e);
       final rawArea = j['area'];
+
+      final imagesRaw = j['images'];
+      final images = <String>[];
+      if (imagesRaw is List) {
+        for (final img in imagesRaw) {
+          if (img is String && img.trim().isNotEmpty) {
+            images.add(img);
+          } else if (img is Map) {
+            final src = img['src'];
+            if (src is String && src.trim().isNotEmpty) images.add(src);
+          }
+        }
+      }
+
+      final firstImage = AppConfig.assetUrl(j['image'] as String? ??
+          (images.isNotEmpty ? images.first : null));
+
       return Property(
         id: (j['id'] as num?)?.toInt(),
         title: j['title'] as String? ?? '',
@@ -304,7 +443,8 @@ class PropertyRepository {
         description: '',
         badge1: j['status'] as String? ?? 'متاح',
         isFavorite: true,
-        imageUrl: AppConfig.assetUrl(j['image'] as String?),
+        imageUrl: firstImage,
+        gallery: images.map(AppConfig.assetUrl).where((u) => u.isNotEmpty).toList(),
         status: j['status'] as String?,
       );
     }).toList();
@@ -502,4 +642,23 @@ class PriceRangeFilter {
         min: json['min'] as num? ?? 0,
         max: json['max'] as num? ?? 1000,
       );
+}
+
+/// صورة مرفوعة من الباك-إند.
+class UploadedImage {
+  final int id;
+  final String src;
+  final String? alt;
+  final bool isPrimary;
+
+  const UploadedImage({required this.id, required this.src, this.alt, this.isPrimary = false});
+
+  factory UploadedImage.fromJson(Map<String, dynamic> json) => UploadedImage(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        src: json['src'] as String? ?? json['path'] as String? ?? '',
+        alt: json['alt'] as String?,
+        isPrimary: json['isPrimary'] == true,
+      );
+
+  String get fullUrl => AppConfig.assetUrl(src);
 }

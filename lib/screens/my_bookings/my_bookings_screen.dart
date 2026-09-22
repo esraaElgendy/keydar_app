@@ -289,9 +289,11 @@ class _BookingCard extends StatelessWidget {
                           children: [
                             const Icon(Icons.calendar_today, size: 12, color: Color(0xFF0D47C9)),
                             const SizedBox(width: 4),
-                            Text(booking.dateRange,
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF0D47C9).withValues(alpha: 0.7))),
+                            Flexible(
+                              child: Text(booking.dateRange, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF0D47C9).withValues(alpha: 0.7))),
+                            ),
                           ],
                         ),
                       ),

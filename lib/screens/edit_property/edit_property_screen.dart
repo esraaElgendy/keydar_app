@@ -1,10 +1,15 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:latlong2/latlong.dart';
 import '../../controllers/app_controller.dart';
 import '../../core/constants/app_colors.dart';
+import '../property_map/interactive_map_picker.dart';
 import '../../data/repositories/property_repository.dart';
 import '../../models/property.dart';
+import '../property_map/property_map_screen.dart';
 
 /// شاشة تعديل عقار موجود — تُعرض بيانات العقار الحالية في حقول قابلة للتعديل
 /// وتحفظ كل الحقول عبر PUT كامل يحافظ على المرافق والمواصفات.
@@ -33,6 +38,8 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   int _baths = 1;
   int _guests = 1;
   bool _saving = false;
+  LatLng? _selectedLocation;
+  bool _geocoding = false;
 
   @override
   void initState() {
@@ -52,6 +59,10 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _beds = p.bedrooms > 0 ? p.bedrooms : 1;
     _baths = p.bathrooms > 0 ? p.bathrooms : 1;
     _guests = p.guests > 0 ? p.guests : 1;
+    // تهيئة الموقع الحالي إن وُجد
+    if (p.latitude != null && p.longitude != null) {
+      _selectedLocation = LatLng(p.latitude!, p.longitude!);
+    }
   }
 
   @override
@@ -70,6 +81,94 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     if (v == null || v == 0) return '';
     final asInt = v.toInt();
     return asInt.toString();
+  }
+
+  String _staticMapUrl(LatLng ll) {
+    final lat = ll.latitude.toStringAsFixed(5);
+    final lon = ll.longitude.toStringAsFixed(5);
+    return 'https://staticmap.openstreetmap.de/staticmap.php'
+        '?center=$lat,$lon&zoom=16&size=600x300&maptype=mapnik'
+        '&markers=$lat,$lon,red-pushpin';
+  }
+
+  Future<void> _openInteractiveMapPicker() async {
+    final result = await Navigator.push<MapLocationResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InteractiveMapPickerScreen(
+          initialLocation: _selectedLocation,
+          initialAddress: _locationCtrl.text.isNotEmpty ? _locationCtrl.text : null,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedLocation = result.coordinates;
+        if (result.address != null && result.address!.isNotEmpty) {
+          _locationCtrl.text = result.address!;
+        }
+      });
+    }
+  }
+
+  Future<void> _geocode(String query) async {
+    if (!mounted) return;
+    setState(() => _geocoding = true);
+    try {
+      final dio = Dio();
+      final res = await dio.get(
+        'https://nominatim.openstreetmap.org/search',
+        queryParameters: {'q': query, 'format': 'json', 'limit': 1},
+        options: Options(headers: {'User-Agent': 'KeyDarApp/1.0'}),
+      );
+      final data = res.data;
+      if (data is List && data.isNotEmpty) {
+        final lat = double.tryParse('${data[0]['lat']}');
+        final lon = double.tryParse('${data[0]['lon']}');
+        if (lat != null && lon != null) {
+          if (mounted) setState(() => _selectedLocation = LatLng(lat, lon));
+        }
+      } else {
+        Get.snackbar('لم يتم العثور', 'جرب عنوان أوضح',
+            snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFFF8F00), colorText: Colors.white);
+      }
+    } catch (_) {
+      Get.snackbar('خطأ', 'تعذر البحث عن العنوان',
+          snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: Colors.white);
+    }
+    if (mounted) setState(() => _geocoding = false);
+  }
+
+  Future<void> _pickCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null && mounted) {
+          setState(() => _selectedLocation = LatLng(last.latitude, last.longitude));
+          Get.snackbar('تم', 'تم استخدام آخر موقع معروف', snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: Colors.white);
+        }
+        return;
+      }
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        Get.snackbar('الصلاحية مرفوضة', 'يرجى منح صلاحية الوصول للموقع',
+            snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFE65100), colorText: Colors.white);
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      if (mounted) {
+        setState(() => _selectedLocation = LatLng(pos.latitude, pos.longitude));
+        Get.snackbar('تم تحديد الموقع', 'موقعك الحالي تم تحديده',
+            snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: Colors.white);
+      }
+    } catch (_) {
+      Get.snackbar('خطأ', 'تعذر الحصول على الموقع الحالي',
+          snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: Colors.white);
+    }
   }
 
   Future<void> _save() async {
@@ -102,6 +201,8 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         beds: _beds,
         baths: _baths,
         guests: _guests,
+        latitude: _selectedLocation?.latitude,
+        longitude: _selectedLocation?.longitude,
       );
       Get.find<AppController>().replaceOwnerProperty(updated);
       if (!mounted) return;
@@ -222,6 +323,191 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                       const SizedBox(width: 10),
                       Expanded(child: _PriceInput(label: 'سنوي', controller: _yearlyCtrl)),
                     ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // ─── قسم الخريطة ───
+            _card(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.map_outlined, color: AppColors.primary, size: 18),
+                      const SizedBox(width: 6),
+                      const _FieldLabel('الموقع على الخريطة'),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: _openInteractiveMapPicker,
+                        icon: const Icon(Icons.map, size: 14, color: Colors.white),
+                        label: const Text('الخريطة التفاعلية', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_selectedLocation != null)
+                        GestureDetector(
+                          onTap: () => setState(() => _selectedLocation = null),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('إزالة', style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // ── خريطة static أو placeholder ──
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 200,
+                      width: double.infinity,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: _selectedLocation != null
+                                ? GestureDetector(
+                                    onTap: () => Navigator.push(context, MaterialPageRoute(
+                                      builder: (_) => PropertyMapScreen(
+                                        latitude: _selectedLocation!.latitude,
+                                        longitude: _selectedLocation!.longitude,
+                                        address: _locationCtrl.text,
+                                      ),
+                                    )),
+                                    child: Image.network(
+                                      _staticMapUrl(_selectedLocation!),
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (c, child, p) => p == null
+                                          ? child
+                                          : const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                                      errorBuilder: (c, e, s) => Container(
+                                        color: const Color(0xFFE8F5E9),
+                                        child: const Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.map, size: 40, color: AppColors.primary),
+                                              SizedBox(height: 6),
+                                              Text('الموقع محدد', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    color: const Color(0xFFF5F5F5),
+                                    child: const Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.location_off_outlined, size: 40, color: AppColors.grey),
+                                          SizedBox(height: 8),
+                                          Text('ابحث عن العنوان أو استخدم موقعك الحالي',
+                                              style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          // ── شريط البحث ──
+                          Positioned(
+                            top: 10, left: 10, right: 10,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 6, offset: const Offset(0, 2))],
+                              ),
+                              child: TextField(
+                                onSubmitted: (v) { if (v.trim().length >= 3) _geocode(v.trim()); },
+                                textDirection: TextDirection.rtl,
+                                textInputAction: TextInputAction.search,
+                                decoration: InputDecoration(
+                                  hintText: 'ابحث عن العنوان...',
+                                  hintTextDirection: TextDirection.rtl,
+                                  hintStyle: TextStyle(fontSize: 12, color: AppColors.grey.withValues(alpha: 0.5)),
+                                  prefixIcon: _geocoding
+                                      ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                                      : const Icon(Icons.search, color: AppColors.grey, size: 18),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // ── زر الموقع الحالي ──
+                          Positioned(
+                            top: 56, right: 10,
+                            child: GestureDetector(
+                              onTap: _pickCurrentLocation,
+                              child: Container(
+                                width: 36, height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 5)],
+                                ),
+                                child: const Icon(Icons.my_location, color: AppColors.primary, size: 18),
+                              ),
+                            ),
+                          ),
+                          // ── حالة الموقع ──
+                          Positioned(
+                            bottom: 10, left: 10, right: 10,
+                            child: _selectedLocation != null
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.9),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.check_circle, color: Colors.white, size: 14),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '${_selectedLocation!.latitude.toStringAsFixed(4)}, ${_selectedLocation!.longitude.toStringAsFixed(4)}',
+                                            style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF8E1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        Icon(Icons.info_outline, color: Color(0xFFF9A825), size: 14),
+                                        SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text('ابحث عن العنوان أو اضغط على أيقونة الموقع',
+                                              style: TextStyle(fontSize: 11, color: Color(0xFFE65100), fontWeight: FontWeight.w500)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

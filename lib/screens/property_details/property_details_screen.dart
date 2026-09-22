@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' as latlong;
 import 'package:url_launcher/url_launcher.dart';
+import '../property_map/property_map_screen.dart';
+import '../../core/utils/location_helper.dart';
 import '../../controllers/app_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/property_detail_controller.dart';
@@ -14,6 +14,7 @@ import '../../data/models/review.dart';
 import '../../models/property.dart';
 import '../../models/sample_data.dart';
 import '../../widgets/cards/property_card.dart';
+import '../../widgets/video_player_widget.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
   final Property? property;
@@ -46,11 +47,22 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> with Sing
       backgroundColor: const Color(0xFFF8F9FA),
       body: Obx(() {
         final prop = _ctrl.property.value;
+        final error = _ctrl.errorMessage.value;
+        final loading = _ctrl.loading.value;
         if (prop == null) {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
         return Column(
           children: [
+            if (loading)
+              const LinearProgressIndicator(color: AppColors.primary, minHeight: 2),
+            if (error != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                color: const Color(0xFFFFF3E0),
+                child: Text(error, style: const TextStyle(fontSize: 12, color: Color(0xFFE65100))),
+              ),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -62,11 +74,55 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> with Sing
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 16),
+                          if (prop.videoUrl != null && prop.videoUrl!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.black,
+                                      builder: (ctx) => SafeArea(
+                                        child: Stack(
+                                          children: [
+                                            Center(
+                                              child: AspectRatio(
+                                                aspectRatio: 16 / 9,
+                                                child: VideoPlayerWidget(videoUrl: prop.videoUrl!),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 16,
+                                              left: 16,
+                                              child: IconButton(
+                                                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                                onPressed: () => Navigator.pop(ctx),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.play_circle_fill, size: 20),
+                                  label: const Text('مشاهدة فيديو العقار', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                ),
+                              ),
+                            ),
                           _PropertyInfo(prop: prop, ctrl: _ctrl),
                           const SizedBox(height: 20),
                           _DetailsTabs(tabController: _tabController),
                           SizedBox(
-                            height: 420,
+                            height: 380,
                             child: TabBarView(
                               controller: _tabController,
                               children: [
@@ -96,98 +152,313 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> with Sing
   }
 }
 
-class _ImageGallery extends StatelessWidget {
+class _ImageGallery extends StatefulWidget {
   final Property prop;
   const _ImageGallery({required this.prop});
 
   @override
+  State<_ImageGallery> createState() => _ImageGalleryState();
+}
+
+class _ImageGalleryState extends State<_ImageGallery> {
+  late final PageController _pageCtrl;
+  int _current = 0;
+
+  List<String> get _images {
+    final urls = <String>[];
+    if (widget.prop.imageUrl != null && widget.prop.imageUrl!.isNotEmpty) {
+      urls.add(widget.prop.imageUrl!);
+    }
+    for (final g in widget.prop.gallery) {
+      if (!urls.contains(g)) urls.add(g);
+    }
+    return urls;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  void _openFullScreen(int initialIndex) {
+    final imgs = _images;
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) => _FullScreenGallery(images: imgs, initialIndex: initialIndex),
+      transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+    ));
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ctrl = Get.find<AppController>();
+    final imgs = _images;
     return Stack(
       children: [
-        Image.asset(
-          AppAssets.building,
+        SizedBox(
           height: 280,
           width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
-            height: 280, color: AppColors.darkBlue,
-            child: const Icon(Icons.image, color: AppColors.white, size: 60),
+          child: imgs.isEmpty
+              ? Container(
+                  color: AppColors.darkBlue,
+                  child: const Icon(Icons.image, color: AppColors.white, size: 60),
+                )
+              : PageView.builder(
+                  controller: _pageCtrl,
+                  itemCount: imgs.length,
+                  onPageChanged: (i) => setState(() => _current = i),
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => _openFullScreen(i),
+                    child: Image.network(
+                      imgs[i],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (_, _, _) => Image.asset(
+                        AppAssets.building,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (_, _, _) => Container(
+                          color: AppColors.darkBlue,
+                          child: const Icon(Icons.image, color: AppColors.white, size: 60),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          right: 16,
+          child: GestureDetector(
+            onTap: () => Get.back(),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.white),
+              child: const Icon(Icons.arrow_forward, color: AppColors.black, size: 20),
+            ),
           ),
         ),
-        Positioned(top: 50, right: 16, child: GestureDetector(
-          onTap: () => Get.back(),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.white),
-            child: const Icon(Icons.arrow_forward, color: AppColors.black, size: 20),
-          ),
-        )),
-        Positioned(top: 50, left: 16, child: Row(
-          children: [
-            GestureDetector(
-              onTap: () => ctrl.toggleFavorite(prop),
-              child: Container(
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          left: 16,
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => ctrl.toggleFavorite(widget.prop),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.white),
+                  child: Obx(() => Icon(
+                    ctrl.isFavorite(widget.prop) ? Icons.favorite : Icons.favorite_border,
+                    color: ctrl.isFavorite(widget.prop) ? Colors.red : AppColors.black,
+                    size: 20,
+                  )),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
                 padding: const EdgeInsets.all(8),
                 decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.white),
-                child: Obx(() => Icon(
-                  ctrl.isFavorite(prop) ? Icons.favorite : Icons.favorite_border,
-                  color: ctrl.isFavorite(prop) ? Colors.red : AppColors.black,
-                  size: 20,
+                child: const Icon(Icons.share_outlined, color: AppColors.black, size: 20),
+              ),
+            ],
+          ),
+        ),
+        if (imgs.length > 1)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_current + 1} / ${imgs.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+        if (imgs.length > 1)
+          Positioned(
+            bottom: 60,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(imgs.length, (i) => AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: i == _current ? 20 : 6,
+                height: 6,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: i == _current ? AppColors.white : AppColors.white.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              )),
+            ),
+          ),
+        if (imgs.isNotEmpty)
+          Positioned(
+            bottom: 12,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Directionality(
+                textDirection: TextDirection.rtl,
+                child: SizedBox(
+                  height: 46,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: imgs.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 6),
+                    itemBuilder: (_, i) => GestureDetector(
+                      onTap: () {
+                        _pageCtrl.animateToPage(i, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                      },
+                      child: Container(
+                        width: 50,
+                        height: 46,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: i == _current ? AppColors.white : AppColors.white.withValues(alpha: 0.4),
+                            width: i == _current ? 2 : 1,
+                          ),
+                        ),
+                        child: Image.network(imgs[i], fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: AppColors.black.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+  const _FullScreenGallery({required this.images, required this.initialIndex});
+
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late final PageController _ctrl;
+  int _current = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+    _ctrl = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _ctrl,
+            itemCount: widget.images.length,
+            onPageChanged: (i) => setState(() => _current = i),
+            itemBuilder: (_, i) => InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Center(
+                child: Image.network(
+                  widget.images[i],
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Icon(Icons.broken_image, color: Colors.white54, size: 60),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.5),
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+          if (widget.images.length > 1)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_current + 1} / ${widget.images.length}',
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          if (widget.images.length > 1)
+            Positioned(
+              bottom: 40,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.images.length, (i) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: i == _current ? 20 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: i == _current ? AppColors.white : Colors.white.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
                 )),
               ),
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.white),
-              child: const Icon(Icons.share_outlined, color: AppColors.black, size: 20),
-            ),
-          ],
-        )),
-        Positioned(bottom: 16, left: 0, right: 0, child: Center(
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Container(
-              height: 50,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: 6,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
-                itemBuilder: (_, i) {
-                  final isMore = i == 5 && prop.gallery.length > 6;
-                  return Container(
-                    width: 60,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.white.withValues(alpha: 0.5)),
-                    ),
-                    child: isMore
-                        ? Container(
-                            color: AppColors.black.withValues(alpha: 0.35),
-                            child: Center(
-                              child: Text(
-                                '+${prop.gallery.length - 5}',
-                                style: const TextStyle(color: AppColors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          )
-                        : Image.network(
-                            prop.gallery.length > i ? prop.gallery[i] : '',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              color: AppColors.black.withValues(alpha: 0.3),
-                            ),
-                          ),
-                  );
-                },
-              ),
-            ),
-          ),
-        )),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -204,14 +475,16 @@ class _PropertyInfo extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(prop.type, style: const TextStyle(fontSize: 12, color: AppColors.grey)),
+            Flexible(
+              child: Text(prop.type, style: const TextStyle(fontSize: 12, color: AppColors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
             const Spacer(),
             Row(
               children: [
                 Text(prop.rating.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.black)),
                 const Icon(Icons.star, color: Colors.amber, size: 16),
                 const SizedBox(width: 4),
-Obx(() {
+                Obx(() {
                   final count = ctrl.totalReviews.value > 0 ? ctrl.totalReviews.value : prop.reviewsCount;
                   return Text('($count تقييم)', style: const TextStyle(fontSize: 12, color: AppColors.grey));
                 }),
@@ -220,12 +493,15 @@ Obx(() {
           ],
         ),
         const SizedBox(height: 6),
-        Text(prop.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.black)),
+        Text(prop.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.black)),
         const SizedBox(height: 4),
         Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(prop.location, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+            Flexible(
+              child: Text(prop.location, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+            ),
             const SizedBox(width: 4),
             const Icon(Icons.location_on, color: AppColors.primary, size: 16),
           ],
@@ -233,9 +509,13 @@ Obx(() {
         const SizedBox(height: 8),
         Row(
           children: [
-            Text(prop.price, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
+            Flexible(
+              child: Text(prop.price, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
+            ),
             const SizedBox(width: 4),
-            Text(prop.period.isNotEmpty ? prop.period : '/ شهرياً', style: const TextStyle(fontSize: 13, color: AppColors.grey)),
+            Text(prop.period.isNotEmpty ? prop.period : '/ شهرياً', maxLines: 1,
+                style: const TextStyle(fontSize: 13, color: AppColors.grey)),
           ],
         ),
       ],
@@ -285,26 +565,64 @@ class _DescriptionTab extends StatelessWidget {
         Text(
           prop.description,
           textAlign: TextAlign.right,
+          maxLines: 5,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 13, color: AppColors.grey, height: 1.6),
         ),
-        TextButton(
-          onPressed: () {},
-          child: const Text('اقرأ المزيد', style: TextStyle(fontSize: 12, color: AppColors.primary)),
-        ),
-        const SizedBox(height: 12),
-        Row(
+        const SizedBox(height: 16),
+        GridView.count(
+          crossAxisCount: 4,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 0.85,
           children: [
-            Expanded(child: _SpecBox(icon: Icons.bathtub_outlined, label: '${prop.bathrooms} حمام')),
-            const SizedBox(width: 8),
-            Expanded(child: _SpecBox(icon: Icons.bed_outlined, label: '${prop.bedrooms} غرف النوم')),
-            const SizedBox(width: 8),
-            Expanded(child: _SpecBox(icon: Icons.layers_outlined, label: prop.floor != null ? '${prop.floor} ' : 'الخامس الدور')),
-            const SizedBox(width: 8),
-            Expanded(child: _SpecBox(icon: Icons.straighten, label: '${prop.area.floorToDouble()} المساحة')),
+            _SpecBox(icon: Icons.bathtub_outlined, label: '${prop.bathrooms} حمام'),
+            _SpecBox(icon: Icons.bed_outlined, label: '${prop.bedrooms} غرف'),
+            _SpecBox(icon: Icons.people_outline, label: '${prop.guests} ضيوف'),
+            _SpecBox(icon: Icons.straighten, label: '${prop.area.toStringAsFixed(0)} م²'),
           ],
         ),
+        if (prop.furnishing != null && prop.furnishing!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: 4,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 0.85,
+            children: [
+              _SpecBox(icon: Icons.layers_outlined, label: prop.floor ?? '—'),
+              _SpecBox(icon: Icons.chair_outlined, label: _furnishingLabel(prop.furnishing)),
+              if (prop.city != null && prop.city!.isNotEmpty)
+                _SpecBox(icon: Icons.location_city, label: prop.city!),
+              if (prop.status != null && prop.status!.isNotEmpty)
+                _SpecBox(icon: Icons.info_outline, label: _statusLabel(prop.status)),
+            ],
+          ),
+        ] else
+          const SizedBox(height: 8),
       ],
     );
+  }
+
+  static String _furnishingLabel(String? v) {
+    switch (v) {
+      case 'furnished': return 'مؤثث';
+      case 'semi_furnished': return 'نصف مؤثث';
+      case 'unfurnished': return 'غير مؤثث';
+      default: return v ?? '—';
+    }
+  }
+
+  static String _statusLabel(String? v) {
+    switch (v) {
+      case 'available': return 'متاح';
+      case 'rented': return 'مؤجر';
+      default: return v ?? '—';
+    }
   }
 }
 
@@ -418,18 +736,20 @@ class _AmenityChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: (MediaQuery.of(context).size.width - 68) / 4,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.fieldBorder),
       ),
-      child: Column(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon ?? Icons.check_circle_outline, color: AppColors.primary, size: 22),
-          const SizedBox(height: 4),
-          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: AppColors.grey)),
+          Icon(icon ?? Icons.check_circle_outline, color: AppColors.primary, size: 18),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.black)),
+          ),
         ],
       ),
     );
@@ -651,12 +971,20 @@ class _ReviewTile extends StatelessWidget {
               ...List.generate(5, (i) => Icon(Icons.star, size: 14, color: i < rating.round() ? Colors.amber : AppColors.fieldBorder)),
               if (verified) ...[
                 const SizedBox(width: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.verified, size: 13, color: Color(0xFF2E7D32)),
-                    Text('مُوثّق', style: TextStyle(fontSize: 10, color: Colors.green.shade800)),
-                  ],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified, size: 12, color: Color(0xFF2E7D32)),
+                      const SizedBox(width: 2),
+                      Text('مُوثّق', style: TextStyle(fontSize: 10, color: Colors.green.shade800)),
+                    ],
+                  ),
                 ),
               ],
             ],
@@ -934,9 +1262,10 @@ class _LocationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lat = prop.latitude;
-    final lng = prop.longitude;
-    final hasCoords = lat != null && lng != null;
+    final fallback = LocationHelper.getFallbackCoords(prop.location.isNotEmpty ? prop.location : prop.city);
+    final lat = prop.latitude ?? fallback?.latitude ?? 24.7136;
+    final lng = prop.longitude ?? fallback?.longitude ?? 46.6753;
+    const hasCoords = true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1000,34 +1329,64 @@ class _LocationSection extends StatelessWidget {
         // ── الخريطة المضمنة ──
         if (hasCoords) ...[
           const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 200,
-              child: FlutterMap(
-                options: MapOptions(
-                  initialCenter: latlong.LatLng(lat, lng),
-                  initialZoom: 15,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => PropertyMapScreen(
+                  latitude: lat,
+                  longitude: lng,
+                  address: prop.location,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.keydar.app',
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: latlong.LatLng(lat, lng),
-                        width: 40,
-                        height: 40,
-                        child: const Icon(Icons.location_pin, color: AppColors.primary, size: 40),
+              ));
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 200,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      'https://staticmap.openstreetmap.de/staticmap.php?center=$lat,$lng&zoom=16&size=600x400&maptype=mapnik&markers=$lat,$lng,red-pushpin',
+                      fit: BoxFit.cover,
+                      loadingBuilder: (c, child, p) => p == null
+                          ? child
+                          : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      errorBuilder: (c, e, s) => Container(
+                        color: const Color(0xFFF5F5F5),
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.map, size: 40, color: AppColors.primary),
+                              SizedBox(height: 6),
+                              Text('الموقع على الخريطة', style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    Positioned(
+                      bottom: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.touch_app, color: Colors.white, size: 14),
+                            SizedBox(width: 6),
+                            Text('اضغط لعرض الخريطة', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

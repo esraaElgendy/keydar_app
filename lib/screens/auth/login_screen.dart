@@ -101,13 +101,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     Center(
-                      child: Text(
-                        "KeyDar",
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          height: 1.0,
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.black),
+                          children: const [
+                            TextSpan(text: 'K', style: TextStyle(fontSize: 32)),
+                            TextSpan(text: 'ey'),
+                            TextSpan(text: 'D', style: TextStyle(fontSize: 32)),
+                            TextSpan(text: 'ar'),
+                          ],
                         ),
                       ),
                     ),

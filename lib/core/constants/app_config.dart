@@ -12,14 +12,34 @@ class AppConfig {
   static const String assetBaseUrl = 'https://keydar-backend.atlas-data.sa';
 
   /// يحوّل مسار وسائط من السيرفر إلى رابط كامل.
-  /// مثال: `/storage/properties/x.jpg` → `https://.../storage/properties/x.jpg`
+  /// مثال: `/properties/images/x.jpg`
+  /// → `https://keydar-backend.atlas-data.sa/properties/images/x.jpg`
   static String assetUrl(String? path) {
     if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http')) return path;
-    return '$assetBaseUrl${path.startsWith('/') ? path : '/$path'}';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+
+    // لو المسار فيه الدومن بدون بروتوكول (مثلاً: keydar-backend.atlas-data.sa/...)
+    // نضيف https://
+    if (path.contains('.sa/') || path.contains('.com/') || path.contains('.org/') || path.contains('.net/')) {
+      return 'https://$path';
+    }
+
+    // تطبيع المسار لإزالة أي /storage/ متكررة في البداية
+    String cleanPath = path.trim();
+    if (cleanPath.startsWith('/storage/')) {
+      cleanPath = cleanPath.substring('/storage'.length);
+    } else if (cleanPath.startsWith('storage/')) {
+      cleanPath = '/${cleanPath.substring('storage/'.length)}';
+    }
+
+    if (!cleanPath.startsWith('/')) cleanPath = '/$cleanPath';
+
+    return '$assetBaseUrl$cleanPath';
   }
 
   // ===== Auth - Customer =====
+
+
   static const String customerRegister = '/auth/customer-register';
   static const String customerLogin = '/auth/customer-login';
   static const String customerLogout = '/auth/customer-logout';
@@ -97,4 +117,17 @@ class AppConfig {
 
   /// إرسال رسالة تواصل معنا.
   static const String contactMessage = '/contact/send-message';
+
+  /// رفع صور العقار (multipart).
+  static String ownerPropertyImages(int id) => '/owner/properties/$id/upload-images';
+
+  /// حذف صورة محددة من العقار.
+  static String ownerPropertyImage(int propertyId, int imageId) =>
+      '/owner/properties/$propertyId/images/$imageId';
+
+  /// رفع فيديو العقار (multipart).
+  static String ownerPropertyVideo(int id) => '/owner/properties/$id/upload-video';
+
+  /// صور العقار للعميل — يرجع جميع الصور كـ src.
+  static String propertyImages(int id) => '/properties/$id/images';
 }

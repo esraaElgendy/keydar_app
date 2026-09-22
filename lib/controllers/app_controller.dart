@@ -55,6 +55,19 @@ class AppController extends GetxController {
       ownerProperties.insert(0, updated);
     }
   }
+
+  /// إزالة عقار من قائمة عقارات المالك بعد حذفه.
+  void removeOwnerProperty(int id) {
+    ownerProperties.removeWhere((p) => p.id == id);
+  }
+
+  /// جلب تفاصيل عقار المالك من السيرفر وتحديثه في القائمة.
+  Future<void> refreshOwnerProperty(int id) async {
+    try {
+      final fresh = await _propertyRepo.fetchOwnerPropertyDetail(id: id);
+      replaceOwnerProperty(fresh);
+    } catch (_) {}
+  }
   final RxString searchQuery = RxString('');
   final RxInt selectedCategoryIndex = 0.obs;
 

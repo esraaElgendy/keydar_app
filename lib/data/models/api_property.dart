@@ -27,6 +27,7 @@ class ApiProperty {
   final Map<String, num>? prices;
   final bool isFavorite;
   final String? description;
+  final String? videoUrl;
 
   const ApiProperty({
     this.id,
@@ -52,6 +53,7 @@ class ApiProperty {
     this.prices,
     this.isFavorite = false,
     this.description,
+    this.videoUrl,
   });
 
   factory ApiProperty.fromJson(Map<String, dynamic> json) {
@@ -78,6 +80,18 @@ class ApiProperty {
       });
     }
 
+    // ── الإحداثيات: تأتي إما مسطحة أو داخل specifications.coordinates ──
+    double? lat = _toNum(json['latitude'])?.toDouble();
+    double? lng = _toNum(json['longitude'])?.toDouble();
+    final specs = json['specifications'];
+    if (specs is Map) {
+      final coords = specs['coordinates'];
+      if (coords is Map) {
+        lat ??= _toNum(coords['lat'])?.toDouble();
+        lng ??= _toNum(coords['lng'])?.toDouble();
+      }
+    }
+
     return ApiProperty(
       id: (json['id'] as num?)?.toInt(),
       image: json['image'] as String?,
@@ -90,8 +104,8 @@ class ApiProperty {
       city: json['city'] as String?,
       title: (json['title'] as String?) ?? '',
       location: json['location'] as String?,
-      latitude: _toNum(json['latitude'])?.toDouble(),
-      longitude: _toNum(json['longitude'])?.toDouble(),
+      latitude: lat,
+      longitude: lng,
       rating: _toNum(json['score'])?.toDouble() ?? _toNum(json['rating'])?.toDouble() ?? 0,
       beds: _toNum(json['beds'])?.toInt() ?? 0,
       baths: _toNum(json['baths'])?.toInt() ?? 0,
@@ -102,6 +116,7 @@ class ApiProperty {
       prices: prices,
       isFavorite: json['isFavorite'] == true,
       description: json['description'] as String?,
+      videoUrl: json['videoUrl'] as String? ?? json['video_url'] as String? ?? json['video'] as String?,
     );
   }
 
@@ -155,7 +170,7 @@ class ApiProperty {
       bathrooms: baths,
       area: area.toDouble(),
       image: '',
-      description: description ?? furnishing ?? '',
+      description: description ?? '',
       badge1: statusLabel,
       isFavorite: isFavorite,
       imageUrl: firstImage,
@@ -167,6 +182,7 @@ class ApiProperty {
       latitude: latitude,
       longitude: longitude,
       prices: prices,
+      videoUrl: AppConfig.assetUrl(videoUrl).isNotEmpty ? AppConfig.assetUrl(videoUrl) : null,
     );
   }
 

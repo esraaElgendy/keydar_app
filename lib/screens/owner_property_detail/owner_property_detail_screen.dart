@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/app_controller.dart';
 import '../../core/constants/amenity_labels.dart';
 import '../../core/constants/app_colors.dart';
 import '../../data/repositories/property_repository.dart';
 import '../../models/property.dart';
+import '../../widgets/video_player_widget.dart';
+import '../add_property/upload_images_screen.dart';
 import '../edit_property/edit_property_screen.dart';
+import '../property_map/property_map_screen.dart';
+import '../../core/utils/location_helper.dart';
 
 class OwnerPropertyDetailScreen extends StatefulWidget {
   final Property property;
@@ -19,6 +24,7 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
   late Property _property;
   bool _loading = true;
   bool _saving = false;
+  bool _deleting = false;
   bool _changingStatus = false;
 
   late int _beds;
@@ -58,10 +64,22 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
 
   Future<void> _loadDetail() async {
     try {
-      final fresh = await PropertyRepository().fetchOwnerPropertyDetail(id: _property.id!);
+      final repo = PropertyRepository();
+      final fresh = await repo.fetchOwnerPropertyDetail(id: _property.id!);
+      Property result = fresh;
+      if (_property.id != null) {
+        final extraImages = await repo.fetchPropertyImages(_property.id!);
+        if (extraImages.isNotEmpty) {
+          final merged = <String>{...extraImages, ...fresh.gallery}.toList();
+          result = fresh.copyWith(
+            gallery: merged,
+            imageUrl: fresh.imageUrl ?? extraImages.first,
+          );
+        }
+      }
       if (!mounted) return;
       setState(() {
-        _property = fresh;
+        _property = result;
         _sync();
         _loading = false;
       });
@@ -103,6 +121,49 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
           colorText: AppColors.white);
     } finally {
       if (mounted) setState(() => _changingStatus = false);
+    }
+  }
+
+  Future<void> _deleteProperty() async {
+    if (_property.id == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('حذف العقار', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('هل أنت متأكد من حذف "${_property.title}"؟\nلا يمكن التراجع عن هذا الإجراء.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء', style: TextStyle(color: AppColors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      await PropertyRepository().deleteOwnerProperty(id: _property.id!);
+      Get.find<AppController>().removeOwnerProperty(_property.id!);
+      if (!mounted) return;
+      Get.back();
+      Get.snackbar('تم الحذف', 'تم حذف العقار بنجاح',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primary,
+          colorText: AppColors.white);
+    } catch (e) {
+      if (!mounted) return;
+      Get.snackbar('فشل الحذف', 'تعذر حذف العقار، حاول مرة أخرى.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFC62828),
+          colorText: AppColors.white);
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -262,6 +323,17 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         actions: [
           if (_property.id != null)
             Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: IconButton(
+                tooltip: 'حذف العقار',
+                icon: _deleting
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC62828)))
+                    : const Icon(Icons.delete_outline, color: Color(0xFFC62828)),
+                onPressed: _deleting ? null : _deleteProperty,
+              ),
+            ),
+          if (_property.id != null)
+            Padding(
               padding: const EdgeInsets.only(left: 12),
               child: IconButton(
                 tooltip: 'تعديل العقار',
@@ -282,7 +354,7 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ─── Hero: image + status ───
+                    // ─── Hero: gallery + status ───
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: Container(
@@ -297,54 +369,76 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                              child: Stack(
-                                children: [
-                                  Center(
-                                    child: _property.imageUrl != null && _property.imageUrl!.isNotEmpty
-                                        ? Image.network(
-                                            _property.imageUrl!,
-                                            height: 190,
-                                            width: double.infinity,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, _, _) => _imageFallback(),
-                                          )
-                                        : _imageFallback(),
-                                  ),
-                                  Positioned(
-                                    top: 12, right: 12,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: _statusColor(_property.badge1).withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: _statusColor(_property.badge1))),
-                                          const SizedBox(width: 6),
-                                          Text(_property.badge1,
-                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _statusColor(_property.badge1))),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  if (_property.id != null)
-                                    Positioned(
-                                      top: 12, left: 12,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.45),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: Text('#${_property.id}',
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.white)),
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              child: _OwnerImageGallery(property: _property, onDeleted: () => _loadDetail()),
                             ),
+                            if (_property.videoUrl != null && _property.videoUrl!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.black,
+                                        builder: (ctx) => SafeArea(
+                                          child: Stack(
+                                            children: [
+                                              Center(
+                                                child: AspectRatio(
+                                                  aspectRatio: 16 / 9,
+                                                  child: VideoPlayerWidget(videoUrl: _property.videoUrl!),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 16,
+                                                left: 16,
+                                                child: IconButton(
+                                                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                                  onPressed: () => Navigator.pop(ctx),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.play_circle_fill, size: 20),
+                                    label: const Text('مشاهدة فيديو العقار', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (_property.id != null)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      await Get.to(() => UploadImagesScreen(
+                                        propertyId: _property.id!,
+                                        propertyTitle: _property.title,
+                                      ));
+                                      _loadDetail();
+                                    },
+                                    icon: const Icon(Icons.add_a_photo, size: 18),
+                                    label: const Text('إضافة صور / فيديو'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                      side: const BorderSide(color: AppColors.primary),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
@@ -632,6 +726,12 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    // ─── Location & Map ───
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _OwnerLocationSection(property: _property, onEdit: _openEdit),
+                    ),
                   ],
                 ),
               ),
@@ -656,19 +756,6 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
       if (remaining > 0 && remaining % 3 == 0) buf.write(',');
     }
     return buf.toString();
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'متاحة':
-        return const Color(0xFF4CAF50);
-      case 'مؤجرة':
-        return const Color(0xFFFF9800);
-      case 'قيد المراجعة':
-        return const Color(0xFF9E9E9E);
-      default:
-        return const Color(0xFF4CAF50);
-    }
   }
 
   String _typeLabel(String type) {
@@ -720,12 +807,137 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
     }
   }
 
-  Widget _imageFallback() => Container(
+}
+
+// ───── Owner Image Gallery with delete ─────
+class _OwnerImageGallery extends StatefulWidget {
+  final Property property;
+  final VoidCallback onDeleted;
+  const _OwnerImageGallery({required this.property, required this.onDeleted});
+
+  @override
+  State<_OwnerImageGallery> createState() => _OwnerImageGalleryState();
+}
+
+class _OwnerImageGalleryState extends State<_OwnerImageGallery> {
+  late final PageController _pageCtrl;
+  int _current = 0;
+
+  List<String> get _images {
+    final urls = <String>[];
+    if (widget.property.imageUrl != null && widget.property.imageUrl!.isNotEmpty) {
+      urls.add(widget.property.imageUrl!);
+    }
+    for (final g in widget.property.gallery) {
+      if (!urls.contains(g)) urls.add(g);
+    }
+    return urls;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imgs = _images;
+    if (imgs.isEmpty) {
+      return Container(
         height: 190,
         width: double.infinity,
         color: AppColors.darkBlue,
         child: const Icon(Icons.business, color: AppColors.white, size: 60),
       );
+    }
+
+    return SizedBox(
+      height: 220,
+      child: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageCtrl,
+            itemCount: imgs.length,
+            onPageChanged: (i) => setState(() => _current = i),
+            itemBuilder: (_, i) => Image.network(
+              imgs[i],
+              fit: BoxFit.cover,
+              width: double.infinity,
+              errorBuilder: (_, _, _) => Container(
+                color: AppColors.darkBlue,
+                child: const Icon(Icons.broken_image, color: AppColors.white, size: 40),
+              ),
+            ),
+          ),
+          // Status badge
+          Positioned(
+            top: 12, right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _statusColor(widget.property.badge1).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: _statusColor(widget.property.badge1))),
+                  const SizedBox(width: 6),
+                  Text(widget.property.badge1,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _statusColor(widget.property.badge1))),
+                ],
+              ),
+            ),
+          ),
+          // Property ID
+          if (widget.property.id != null)
+            Positioned(
+              top: 12, left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('#${widget.property.id}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.white)),
+              ),
+            ),
+          // Dots indicator
+          if (imgs.length > 1)
+            Positioned(
+              bottom: 8,
+              left: 0, right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(imgs.length, (i) => Container(
+                  width: i == _current ? 20 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: i == _current ? AppColors.white : AppColors.white.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                )),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Color _statusColor(String status) {
+    if (status.contains('مؤجر') || status.toLowerCase().contains('rented')) return Colors.orange;
+    if (status.contains('مراجعة') || status.toLowerCase().contains('review')) return Colors.blue;
+    return const Color(0xFF4CAF50);
+  }
 }
 
 // ───── Status button ─────
@@ -1035,6 +1247,281 @@ class _InfoChip extends StatelessWidget {
           Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey)),
           const SizedBox(height: 4),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+// ───── Owner Location & Map Section ─────
+class _OwnerLocationSection extends StatelessWidget {
+  final Property property;
+  final VoidCallback onEdit;
+  const _OwnerLocationSection({required this.property, required this.onEdit});
+
+  String get _staticMapUrl {
+    final lat = property.latitude!;
+    final lng = property.longitude!;
+    return 'https://staticmap.openstreetmap.de/staticmap.php'
+        '?center=$lat,$lng&zoom=16&size=600x400&maptype=mapnik'
+        '&markers=$lat,$lng,red-pushpin';
+  }
+
+  Future<void> _openGoogleMaps() async {
+    final lat = property.latitude!;
+    final lng = property.longitude!;
+    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      Get.snackbar('تنبيه', 'تعذر فتح خرائط جوجل', snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lat = property.latitude;
+    final lng = property.longitude;
+    final hasCoords = lat != null && lng != null;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── العنوان ──
+          Row(
+            children: [
+              const Icon(Icons.map_outlined, color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              const Text('الموقع والخريطة',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
+              const Spacer(),
+              if (!hasCoords)
+                GestureDetector(
+                  onTap: onEdit,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_location_alt_outlined, size: 14, color: AppColors.primary),
+                        SizedBox(width: 4),
+                        Text('تحديد الموقع', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          if (!hasCoords) ...[
+            // ── لا يوجد إحداثيات ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.location_off_outlined, size: 40, color: Color(0xFFF9A825)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'لم يتم تحديد موقع العقار على الخريطة',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'اضغط على "تحديد الموقع" أعلاه لإضافة الإحداثيات\nوتمكين العملاء من العثور على العقار بسهولة',
+                    style: TextStyle(fontSize: 12, color: AppColors.grey.withValues(alpha: 0.8), height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_location_alt, size: 18, color: Colors.white),
+                      label: const Text('إضافة موقع العقار',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // ── عنوان الموقع + إحداثيات ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F0FE),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.place_outlined, color: AppColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          property.location.isEmpty ? 'الموقع على الخريطة' : property.location,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
+                          style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.7)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _openGoogleMaps,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.directions_outlined, size: 14, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text('اتجاهات', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            // ── الخريطة المصغرة (اضغط لفتح الخريطة الكاملة) ──
+            GestureDetector(
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => PropertyMapScreen(
+                    latitude: lat,
+                    longitude: lng,
+                    address: property.location,
+                  ),
+                ));
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 200,
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        _staticMapUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (c, child, p) => p == null
+                            ? child
+                            : const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                        errorBuilder: (c, e, s) => Container(
+                          color: const Color(0xFFF5F5F5),
+                          child: const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.map, size: 40, color: AppColors.primary),
+                                SizedBox(height: 6),
+                                Text('موقع العقار', style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.touch_app, color: Colors.white, size: 14),
+                              SizedBox(width: 6),
+                              Text('اضغط لعرض الخريطة كاملة',
+                                  style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // ── أزرار الإجراءات ──
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _openGoogleMaps,
+                    icon: const Icon(Icons.directions_outlined, size: 16, color: Colors.white),
+                    label: const Text('الاتجاهات',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_location_alt_outlined, size: 16, color: AppColors.primary),
+                    label: const Text('تعديل الموقع',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      side: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
