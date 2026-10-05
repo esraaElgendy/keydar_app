@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../controllers/app_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_config.dart';
@@ -20,7 +19,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     AuthController.instance.fetchProfile();
-    AuthController.instance.fetchStatistics();
   }
 
   @override
@@ -38,8 +36,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     const _ProfileHeader(),
                     const SizedBox(height: 20),
-                    const _StatisticsSection(),
-                    const SizedBox(height: 24),
                     _Section(title: 'الحساب', children: [
                       _OptionTile(icon: Icons.person_outline, label: 'المعلومات الشخصية', onTap: () => Get.toNamed(AppRoutes.editProfile)),
                       _OptionTile(icon: Icons.credit_card_outlined, label: 'طرق الدفع'),
@@ -177,155 +173,6 @@ class _HeaderAvatar extends StatelessWidget {
         decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.fieldBorder),
         child: const Icon(Icons.person, size: 40, color: AppColors.grey),
       );
-}
-
-/// إحصائيات المستأجر من `GET /customers/statistics`.
-class _StatisticsSection extends StatelessWidget {
-  const _StatisticsSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 4),
-          child: Text('إحصائياتك', style: TextStyle(fontSize: 14, color: AppColors.grey.withValues(alpha: 0.6))),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Obx(() {
-            final s = AuthController.instance.statistics.value;
-            return Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatCart(
-                        icon: Icons.calendar_month_outlined,
-                        iconColor: AppColors.primary,
-                        label: 'إجمالي الحجوزات',
-                        value: '${s?.totalBookings ?? 0}',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCart(
-                        icon: Icons.event_available_outlined,
-                        iconColor: const Color(0xFF2E7D32),
-                        label: 'حجوزات قادمة',
-                        value: '${s?.upcomingBookings ?? 0}',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatCart(
-                        icon: Icons.done_all,
-                        iconColor: const Color(0xFFB26A00),
-                        label: 'حجوزات مكتملة',
-                        value: '${s?.completedBookings ?? 0}',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCart(
-                        icon: Icons.favorite_outline,
-                        iconColor: const Color(0xFFB23A48),
-                        label: 'العقارات المفضلة',
-                        value: '${Get.find<AppController>().favorites.length}',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.payments_outlined, color: AppColors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('إجمالي ما أنفقته', style: TextStyle(fontSize: 13, color: AppColors.grey)),
-                            const SizedBox(height: 2),
-                            Obx(() {
-                              final spent = AuthController.instance.statistics.value?.totalMoneySpent ?? 0;
-                              return Text(
-                                '${_fmtMoney(spent)} ر.س',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.black),
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  static String _fmtMoney(double v) {
-    final isInt = v == v.roundToDouble();
-    return isInt ? v.toInt().toString() : v.toStringAsFixed(2);
-  }
-}
-
-class _StatCart extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String label, value;
-  const _StatCart({required this.icon, required this.iconColor, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.black)),
-          const SizedBox(height: 2),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: AppColors.grey)),
-        ],
-      ),
-    );
-  }
 }
 
 class _Section extends StatelessWidget {
