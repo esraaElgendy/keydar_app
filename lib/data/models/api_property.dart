@@ -28,6 +28,10 @@ class ApiProperty {
   final bool isFavorite;
   final String? description;
   final String? videoUrl;
+  final int kitchens;
+  final String? address;
+  final String? buildingNumber;
+  final String? cancellationPolicy;
 
   const ApiProperty({
     this.id,
@@ -54,9 +58,18 @@ class ApiProperty {
     this.isFavorite = false,
     this.description,
     this.videoUrl,
+    this.kitchens = 0,
+    this.address,
+    this.buildingNumber,
+    this.cancellationPolicy,
   });
 
   factory ApiProperty.fromJson(Map<String, dynamic> json) {
+    final specsRaw = json['specs'] ?? json['specifications'];
+    final specs = specsRaw is Map
+        ? Map<String, dynamic>.from(specsRaw)
+        : const <String, dynamic>{};
+
     final imagesRaw = json['images'];
     final images = <String>[];
     if (imagesRaw is List) {
@@ -66,6 +79,20 @@ class ApiProperty {
         } else if (e is Map) {
           final src = e['src'];
           if (src is String && src.trim().isNotEmpty) images.add(src);
+        }
+      }
+    }
+    // بعض استجابات التفاصيل ترجع الصور داخل `gallery` فقط.
+    if (images.isEmpty) {
+      final galleryRaw = json['gallery'];
+      if (galleryRaw is List) {
+        for (final e in galleryRaw) {
+          if (e is String && e.trim().isNotEmpty) {
+            images.add(e);
+          } else if (e is Map) {
+            final src = e['src'];
+            if (src is String && src.trim().isNotEmpty) images.add(src);
+          }
         }
       }
     }
@@ -80,16 +107,28 @@ class ApiProperty {
       });
     }
 
-    // ── الإحداثيات: تأتي إما مسطحة أو داخل specifications.coordinates ──
+    // ── الإحداثيات: تأتي مسطحة أو داخل specs/specifications.coordinates ──
     double? lat = _toNum(json['latitude'])?.toDouble();
     double? lng = _toNum(json['longitude'])?.toDouble();
-    final specs = json['specifications'];
-    if (specs is Map) {
-      final coords = specs['coordinates'];
-      if (coords is Map) {
-        lat ??= _toNum(coords['lat'])?.toDouble();
-        lng ??= _toNum(coords['lng'])?.toDouble();
+    final coords = specs['coordinates'];
+    if (coords is Map) {
+      lat ??= _toNum(coords['lat'])?.toDouble();
+      lng ??= _toNum(coords['lng'] ?? coords['long'])?.toDouble();
+    }
+
+    // ── الفيديو: قد يأتي في الجذر أو داخل specs ──
+    final video =
+        json['videoUrl'] as String? ??
+        json['video_url'] as String? ??
+        json['video'] as String? ??
+        specs['video'] as String? ??
+        specs['video_url'] as String?;
+
+    String? pickString(List<dynamic> values) {
+      for (final v in values) {
+        if (v is String && v.trim().isNotEmpty) return v.trim();
       }
+      return null;
     }
 
     return ApiProperty(
@@ -97,16 +136,22 @@ class ApiProperty {
       image: json['image'] as String?,
       images: images,
       tag: json['tag'] as String?,
-      propertyType: json['propertyType'] as String?,
+      propertyType:
+          json['propertyType'] as String? ?? json['property_type'] as String?,
       status: json['status'] as String?,
-      approvalStatus: json['approvalStatus'] as String?,
+      approvalStatus:
+          json['approvalStatus'] as String? ??
+          json['approval_status'] as String?,
       furnishing: json['furnishing'] as String?,
-      city: json['city'] as String?,
+      city: pickString([json['city'], specs['city']]),
       title: (json['title'] as String?) ?? '',
       location: json['location'] as String?,
       latitude: lat,
       longitude: lng,
-      rating: _toNum(json['score'])?.toDouble() ?? _toNum(json['rating'])?.toDouble() ?? 0,
+      rating:
+          _toNum(json['score'])?.toDouble() ??
+          _toNum(json['rating'])?.toDouble() ??
+          0,
       beds: _toNum(json['beds'])?.toInt() ?? 0,
       baths: _toNum(json['baths'])?.toInt() ?? 0,
       guests: _toNum(json['guests'])?.toInt() ?? 0,
@@ -116,7 +161,20 @@ class ApiProperty {
       prices: prices,
       isFavorite: json['isFavorite'] == true,
       description: json['description'] as String?,
-      videoUrl: json['videoUrl'] as String? ?? json['video_url'] as String? ?? json['video'] as String?,
+      videoUrl: video,
+      kitchens: _toNum(json['kitchens'] ?? specs['kitchens'])?.toInt() ?? 0,
+      address: pickString([specs['address'], json['address']]),
+      buildingNumber: pickString([
+        specs['building_number'],
+        specs['buildingNumber'],
+        json['building_number'],
+        json['buildingNumber'],
+      ]),
+      cancellationPolicy: pickString([
+        json['cancellationPolicy'],
+        json['cancellation_policy'],
+        specs['cancellation_policy'],
+      ]),
     );
   }
 
@@ -132,8 +190,8 @@ class ApiProperty {
       final periodKey = period == 'شهرياً'
           ? 'monthly'
           : period == 'سنوياً'
-              ? 'yearly'
-              : 'daily';
+          ? 'yearly'
+          : 'daily';
       final v = prices![periodKey];
       if (v != null) return _formatPrice(v);
     }
@@ -156,7 +214,10 @@ class ApiProperty {
 
   /// تحويل الكائن الخام إلى موديل الواجهة [Property].
   Property toProperty() {
-    final firstImage = AppConfig.assetUrl(image ?? (images.isNotEmpty ? images.first : null));
+    final firstImage = AppConfig.assetUrl(
+      image ?? (images.isNotEmpty ? images.first : null),
+    );
+    final resolvedVideo = AppConfig.assetUrl(videoUrl);
     return Property(
       id: id,
       title: title,
@@ -174,7 +235,10 @@ class ApiProperty {
       badge1: statusLabel,
       isFavorite: isFavorite,
       imageUrl: firstImage,
-      gallery: images.map(AppConfig.assetUrl).where((u) => u.isNotEmpty).toList(),
+      gallery: images
+          .map(AppConfig.assetUrl)
+          .where((u) => u.isNotEmpty)
+          .toList(),
       status: status,
       furnishing: furnishing,
       city: city,
@@ -182,7 +246,11 @@ class ApiProperty {
       latitude: latitude,
       longitude: longitude,
       prices: prices,
-      videoUrl: AppConfig.assetUrl(videoUrl).isNotEmpty ? AppConfig.assetUrl(videoUrl) : null,
+      videoUrl: resolvedVideo.isNotEmpty ? resolvedVideo : null,
+      kitchens: kitchens,
+      address: address,
+      buildingNumber: buildingNumber,
+      cancellationPolicy: cancellationPolicy,
     );
   }
 
@@ -202,7 +270,9 @@ class ApiProperty {
   String _friendlyLocation() {
     final raw = (location ?? '').trim();
     final lower = raw.toLowerCase();
-    if (lower.contains('lat:') || lower.contains('lng:') || lower.contains('latitude')) {
+    if (lower.contains('lat:') ||
+        lower.contains('lng:') ||
+        lower.contains('latitude')) {
       return 'الموقع على الخريطة';
     }
     return raw;
@@ -283,27 +353,39 @@ class ApiPropertyDetail {
       floor = specs['floor'] as String?;
       kitchens = (specs['kitchens'] as num?)?.toInt() ?? 0;
       address = specs['address'] as String?;
-      kitchenAmenities.addAll(_stringList(specs['kitchen_amenities']));
-      bathroomAmenities.addAll(_stringList(specs['bathroom_amenities']));
-      primaryAmenities.addAll(_stringList(specs['primary_amenities']));
-      secondaryAmenities.addAll(_stringList(specs['secondary_amenities']));
-      specFeatures.addAll(_stringList(specs['property_features']));
+      kitchenAmenities.addAll(_stringList(specs['kitchen_amenities'] ?? specs['kitchenAmenities']));
+      bathroomAmenities.addAll(_stringList(specs['bathroom_amenities'] ?? specs['bathroomAmenities']));
+      primaryAmenities.addAll(_stringList(specs['primary_amenities'] ?? specs['primaryAmenities']));
+      secondaryAmenities.addAll(_stringList(specs['secondary_amenities'] ?? specs['secondaryAmenities']));
+      specFeatures.addAll(_stringList(specs['property_features'] ?? specs['propertyFeatures']));
     }
 
-    if (kitchenAmenities.isEmpty) kitchenAmenities.addAll(_stringList(json['kitchenAmenities']));
-    if (bathroomAmenities.isEmpty) bathroomAmenities.addAll(_stringList(json['bathroomAmenities']));
-    if (primaryAmenities.isEmpty) primaryAmenities.addAll(_stringList(json['primaryAmenities']));
-    if (secondaryAmenities.isEmpty) secondaryAmenities.addAll(_stringList(json['secondaryAmenities']));
-    if (specFeatures.isEmpty) specFeatures.addAll(_stringList(json['propertyFeatures']));
+    if (kitchenAmenities.isEmpty)
+      kitchenAmenities.addAll(_stringList(json['kitchenAmenities']));
+    if (bathroomAmenities.isEmpty)
+      bathroomAmenities.addAll(_stringList(json['bathroomAmenities']));
+    if (primaryAmenities.isEmpty)
+      primaryAmenities.addAll(_stringList(json['primaryAmenities']));
+    if (secondaryAmenities.isEmpty)
+      secondaryAmenities.addAll(_stringList(json['secondaryAmenities']));
+    if (specFeatures.isEmpty)
+      specFeatures.addAll(_stringList(json['propertyFeatures']));
+
+    final base = ApiProperty.fromJson(json);
+    // بعض العقارات القديمة/المضافة من لوحة الويب لا ترسل المجموعة الأساسية،
+    // لذلك نستخدم قائمة amenities العامة كبديل حتى لا تختفي من التطبيق.
+    if (primaryAmenities.isEmpty) {
+      primaryAmenities.addAll(_stringList(json['amenities']));
+    }
 
     return ApiPropertyDetail(
-      base: ApiProperty.fromJson(json),
+      base: base,
       description: json['description'] as String?,
       reviewsCount: (json['reviewsCount'] as num?)?.toInt() ?? 0,
       amenities: _stringList(json['amenities']),
       floor: floor,
-      kitchens: kitchens,
-      address: address,
+      kitchens: kitchens > 0 ? kitchens : base.kitchens,
+      address: address ?? base.address,
       createdAt: json['createdAt'] as String?,
       kitchenAmenities: kitchenAmenities,
       bathroomAmenities: bathroomAmenities,

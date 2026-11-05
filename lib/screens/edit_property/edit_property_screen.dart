@@ -29,6 +29,9 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   late final TextEditingController _dailyCtrl;
   late final TextEditingController _monthlyCtrl;
   late final TextEditingController _yearlyCtrl;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _buildingCtrl;
+  late final TextEditingController _floorCtrl;
 
   late String _type;
   late String _city;
@@ -36,6 +39,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   late String _period;
   int _beds = 1;
   int _baths = 1;
+  int _kitchens = 0;
   int _guests = 1;
   bool _saving = false;
   LatLng? _selectedLocation;
@@ -48,16 +52,22 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _titleCtrl = TextEditingController(text: p.title);
     _descCtrl = TextEditingController(text: p.description);
     _locationCtrl = TextEditingController(text: p.location);
-    _areaCtrl = TextEditingController(text: p.area == 0 ? '' : p.area.toStringAsFixed(0));
+    _areaCtrl = TextEditingController(
+      text: p.area == 0 ? '' : p.area.toStringAsFixed(0),
+    );
     _dailyCtrl = TextEditingController(text: _numText(p.prices?['daily']));
     _monthlyCtrl = TextEditingController(text: _numText(p.prices?['monthly']));
     _yearlyCtrl = TextEditingController(text: _numText(p.prices?['yearly']));
+    _addressCtrl = TextEditingController(text: p.address ?? '');
+    _buildingCtrl = TextEditingController(text: p.buildingNumber ?? '');
+    _floorCtrl = TextEditingController(text: p.floor ?? '');
     _type = _typeLabel(p.type);
     _city = _cityLabel(p.city);
     _furnishing = _furnishingLabel(p.furnishing);
     _period = _periodLabel(p.period);
     _beds = p.bedrooms > 0 ? p.bedrooms : 1;
     _baths = p.bathrooms > 0 ? p.bathrooms : 1;
+    _kitchens = p.kitchens;
     _guests = p.guests > 0 ? p.guests : 1;
     // تهيئة الموقع الحالي إن وُجد
     if (p.latitude != null && p.longitude != null) {
@@ -74,6 +84,9 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _dailyCtrl.dispose();
     _monthlyCtrl.dispose();
     _yearlyCtrl.dispose();
+    _addressCtrl.dispose();
+    _buildingCtrl.dispose();
+    _floorCtrl.dispose();
     super.dispose();
   }
 
@@ -97,7 +110,9 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
       MaterialPageRoute(
         builder: (_) => InteractiveMapPickerScreen(
           initialLocation: _selectedLocation,
-          initialAddress: _locationCtrl.text.isNotEmpty ? _locationCtrl.text : null,
+          initialAddress: _locationCtrl.text.isNotEmpty
+              ? _locationCtrl.text
+              : null,
         ),
       ),
     );
@@ -130,12 +145,22 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
           if (mounted) setState(() => _selectedLocation = LatLng(lat, lon));
         }
       } else {
-        Get.snackbar('لم يتم العثور', 'جرب عنوان أوضح',
-            snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFFF8F00), colorText: Colors.white);
+        Get.snackbar(
+          'لم يتم العثور',
+          'جرب عنوان أوضح',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFFF8F00),
+          colorText: Colors.white,
+        );
       }
     } catch (_) {
-      Get.snackbar('خطأ', 'تعذر البحث عن العنوان',
-          snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: Colors.white);
+      Get.snackbar(
+        'خطأ',
+        'تعذر البحث عن العنوان',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFC62828),
+        colorText: Colors.white,
+      );
     }
     if (mounted) setState(() => _geocoding = false);
   }
@@ -146,38 +171,69 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
       if (!serviceEnabled) {
         final last = await Geolocator.getLastKnownPosition();
         if (last != null && mounted) {
-          setState(() => _selectedLocation = LatLng(last.latitude, last.longitude));
-          Get.snackbar('تم', 'تم استخدام آخر موقع معروف', snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: Colors.white);
+          setState(
+            () => _selectedLocation = LatLng(last.latitude, last.longitude),
+          );
+          Get.snackbar(
+            'تم',
+            'تم استخدام آخر موقع معروف',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: AppColors.primary,
+            colorText: Colors.white,
+          );
         }
         return;
       }
       LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        Get.snackbar('الصلاحية مرفوضة', 'يرجى منح صلاحية الوصول للموقع',
-            snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFE65100), colorText: Colors.white);
+      if (perm == LocationPermission.denied)
+        perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        Get.snackbar(
+          'الصلاحية مرفوضة',
+          'يرجى منح صلاحية الوصول للموقع',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFE65100),
+          colorText: Colors.white,
+        );
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
       if (mounted) {
         setState(() => _selectedLocation = LatLng(pos.latitude, pos.longitude));
-        Get.snackbar('تم تحديد الموقع', 'موقعك الحالي تم تحديده',
-            snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: Colors.white);
+        Get.snackbar(
+          'تم تحديد الموقع',
+          'موقعك الحالي تم تحديده',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primary,
+          colorText: Colors.white,
+        );
       }
     } catch (_) {
-      Get.snackbar('خطأ', 'تعذر الحصول على الموقع الحالي',
-          snackPosition: SnackPosition.BOTTOM, backgroundColor: const Color(0xFFC62828), colorText: Colors.white);
+      Get.snackbar(
+        'خطأ',
+        'تعذر الحصول على الموقع الحالي',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFC62828),
+        colorText: Colors.white,
+      );
     }
   }
 
   Future<void> _save() async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (_titleCtrl.text.trim().isEmpty || _descCtrl.text.trim().isEmpty) {
-      Get.snackbar('معلومات ناقصة', 'أدخل اسم العقار ووصفه قبل الحفظ',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
+      Get.snackbar(
+        'معلومات ناقصة',
+        'أدخل اسم العقار ووصفه قبل الحفظ',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+      );
       return;
     }
     setState(() => _saving = true);
@@ -194,29 +250,48 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         period: _period,
         area: num.tryParse(_areaCtrl.text) ?? widget.property.area,
         prices: {
-          'daily': num.tryParse(_dailyCtrl.text) ?? widget.property.prices?['daily'] ?? 0,
-          'monthly': num.tryParse(_monthlyCtrl.text) ?? widget.property.prices?['monthly'] ?? 0,
-          'yearly': num.tryParse(_yearlyCtrl.text) ?? widget.property.prices?['yearly'] ?? 0,
+          'daily':
+              num.tryParse(_dailyCtrl.text) ??
+              widget.property.prices?['daily'] ??
+              0,
+          'monthly':
+              num.tryParse(_monthlyCtrl.text) ??
+              widget.property.prices?['monthly'] ??
+              0,
+          'yearly':
+              num.tryParse(_yearlyCtrl.text) ??
+              widget.property.prices?['yearly'] ??
+              0,
         },
         beds: _beds,
         baths: _baths,
+        kitchens: _kitchens,
         guests: _guests,
+        address: _addressCtrl.text.trim(),
+        buildingNumber: _buildingCtrl.text.trim(),
+        floor: _floorCtrl.text.trim(),
         latitude: _selectedLocation?.latitude,
         longitude: _selectedLocation?.longitude,
       );
       Get.find<AppController>().replaceOwnerProperty(updated);
       if (!mounted) return;
-      Get.snackbar('تم الحفظ', 'تم تحديث بيانات العقار بنجاح',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
+      Get.snackbar(
+        'تم الحفظ',
+        'تم تحديث بيانات العقار بنجاح',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+      );
       Get.back();
     } catch (e) {
       if (!mounted) return;
-      Get.snackbar('فشل الحفظ', 'تعذر تحديث العقار، حاول مرة أخرى.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFFC62828),
-          colorText: AppColors.white);
+      Get.snackbar(
+        'فشل الحفظ',
+        'تعذر تحديث العقار، حاول مرة أخرى.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFC62828),
+        colorText: AppColors.white,
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -230,7 +305,14 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         backgroundColor: AppColors.white,
         elevation: 0,
         centerTitle: true,
-        title: const Text('تعديل العقار', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+        title: const Text(
+          'تعديل العقار',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.darkText,
+          ),
+        ),
         leading: Padding(
           padding: const EdgeInsets.only(right: 12),
           child: IconButton(
@@ -250,11 +332,18 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                 children: [
                   const _FieldLabel('اسم العقار'),
                   const SizedBox(height: 6),
-                  _Input(controller: _titleCtrl, hint: 'مثال: فيلا فاخرة بموقع مميز'),
+                  _Input(
+                    controller: _titleCtrl,
+                    hint: 'مثال: فيلا فاخرة بموقع مميز',
+                  ),
                   const SizedBox(height: 16),
                   const _FieldLabel('وصف العقار'),
                   const SizedBox(height: 6),
-                  _Input(controller: _descCtrl, hint: 'اكتب وصفاً تفصيلياً...', maxLines: 4),
+                  _Input(
+                    controller: _descCtrl,
+                    hint: 'اكتب وصفاً تفصيلياً...',
+                    maxLines: 4,
+                  ),
                 ],
               ),
             ),
@@ -265,17 +354,45 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                 children: [
                   Row(
                     children: [
-                      Expanded(child: _Dropdown(label: 'نوع العقار', value: _type, items: _typeMap.keys.toList(), onChanged: (v) => setState(() => _type = v))),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'نوع العقار',
+                          value: _type,
+                          items: _typeMap.keys.toList(),
+                          onChanged: (v) => setState(() => _type = v),
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      Expanded(child: _Dropdown(label: 'المدينة', value: _city, items: _cityMap.keys.toList(), onChanged: (v) => setState(() => _city = v))),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'المدينة',
+                          value: _city,
+                          items: _cityMap.keys.toList(),
+                          onChanged: (v) => setState(() => _city = v),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: _Dropdown(label: 'التأثيث', value: _furnishing, items: _furnishingMap.keys.toList(), onChanged: (v) => setState(() => _furnishing = v))),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'التأثيث',
+                          value: _furnishing,
+                          items: _furnishingMap.keys.toList(),
+                          onChanged: (v) => setState(() => _furnishing = v),
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      Expanded(child: _Dropdown(label: 'فترة الإيجار', value: _period, items: _periodMap.keys.toList(), onChanged: (v) => setState(() => _period = v))),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'فترة الإيجار',
+                          value: _period,
+                          items: _periodMap.keys.toList(),
+                          onChanged: (v) => setState(() => _period = v),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -294,15 +411,80 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const _FieldLabel('تفاصيل العنوان'),
+                  const SizedBox(height: 12),
+                  _Input(controller: _addressCtrl, hint: 'الشارع / الحي'),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _Input(
+                          controller: _buildingCtrl,
+                          hint: 'رقم المبنى',
+                          number: true,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _Input(
+                          controller: _floorCtrl,
+                          hint: 'الدور',
+                          number: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _card(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const _FieldLabel('الغرف والضيوف'),
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _CountStepper(label: 'الغرف', icon: Icons.bed, value: _beds, onChanged: (v) => setState(() => _beds = v))),
+                      Expanded(
+                        child: _CountStepper(
+                          label: 'الغرف',
+                          icon: Icons.bed,
+                          value: _beds,
+                          onChanged: (v) => setState(() => _beds = v),
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      Expanded(child: _CountStepper(label: 'الحمامات', icon: Icons.bathroom, value: _baths, onChanged: (v) => setState(() => _baths = v))),
+                      Expanded(
+                        child: _CountStepper(
+                          label: 'الحمامات',
+                          icon: Icons.bathroom,
+                          value: _baths,
+                          onChanged: (v) => setState(() => _baths = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _CountStepper(
+                          label: 'المطابخ',
+                          icon: Icons.kitchen,
+                          value: _kitchens,
+                          onChanged: (v) => setState(() => _kitchens = v),
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      Expanded(child: _CountStepper(label: 'الضيوف', icon: Icons.people, value: _guests, onChanged: (v) => setState(() => _guests = v))),
+                      Expanded(
+                        child: _CountStepper(
+                          label: 'الضيوف',
+                          icon: Icons.people,
+                          value: _guests,
+                          onChanged: (v) => setState(() => _guests = v),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -317,11 +499,26 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _PriceInput(label: 'يومي', controller: _dailyCtrl)),
+                      Expanded(
+                        child: _PriceInput(
+                          label: 'يومي',
+                          controller: _dailyCtrl,
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      Expanded(child: _PriceInput(label: 'شهري', controller: _monthlyCtrl)),
+                      Expanded(
+                        child: _PriceInput(
+                          label: 'شهري',
+                          controller: _monthlyCtrl,
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      Expanded(child: _PriceInput(label: 'سنوي', controller: _yearlyCtrl)),
+                      Expanded(
+                        child: _PriceInput(
+                          label: 'سنوي',
+                          controller: _yearlyCtrl,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -335,18 +532,38 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.map_outlined, color: AppColors.primary, size: 18),
+                      const Icon(
+                        Icons.map_outlined,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
                       const SizedBox(width: 6),
                       const _FieldLabel('الموقع على الخريطة'),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: _openInteractiveMapPicker,
-                        icon: const Icon(Icons.map, size: 14, color: Colors.white),
-                        label: const Text('الخريطة التفاعلية', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                        icon: const Icon(
+                          Icons.map,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'الخريطة التفاعلية',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
@@ -356,12 +573,22 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                         GestureDetector(
                           onTap: () => setState(() => _selectedLocation = null),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.red.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text('إزالة', style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold)),
+                            child: const Text(
+                              'إزالة',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -378,28 +605,47 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                           Positioned.fill(
                             child: _selectedLocation != null
                                 ? GestureDetector(
-                                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                                      builder: (_) => PropertyMapScreen(
-                                        latitude: _selectedLocation!.latitude,
-                                        longitude: _selectedLocation!.longitude,
-                                        address: _locationCtrl.text,
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => PropertyMapScreen(
+                                          latitude: _selectedLocation!.latitude,
+                                          longitude:
+                                              _selectedLocation!.longitude,
+                                          address: _locationCtrl.text,
+                                        ),
                                       ),
-                                    )),
+                                    ),
                                     child: Image.network(
                                       _staticMapUrl(_selectedLocation!),
                                       fit: BoxFit.cover,
                                       loadingBuilder: (c, child, p) => p == null
                                           ? child
-                                          : const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                                          : const Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
                                       errorBuilder: (c, e, s) => Container(
                                         color: const Color(0xFFE8F5E9),
                                         child: const Center(
                                           child: Column(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(Icons.map, size: 40, color: AppColors.primary),
+                                              Icon(
+                                                Icons.map,
+                                                size: 40,
+                                                color: AppColors.primary,
+                                              ),
                                               SizedBox(height: 6),
-                                              Text('الموقع محدد', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                              Text(
+                                                'الموقع محدد',
+                                                style: TextStyle(
+                                                  color: AppColors.primary,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -412,10 +658,19 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.location_off_outlined, size: 40, color: AppColors.grey),
+                                          Icon(
+                                            Icons.location_off_outlined,
+                                            size: 40,
+                                            color: AppColors.grey,
+                                          ),
                                           SizedBox(height: 8),
-                                          Text('ابحث عن العنوان أو استخدم موقعك الحالي',
-                                              style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                                          Text(
+                                            'ابحث عن العنوان أو استخدم موقعك الحالي',
+                                            style: TextStyle(
+                                              color: AppColors.grey,
+                                              fontSize: 12,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -423,26 +678,57 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                           ),
                           // ── شريط البحث ──
                           Positioned(
-                            top: 10, left: 10, right: 10,
+                            top: 10,
+                            left: 10,
+                            right: 10,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: AppColors.white,
                                 borderRadius: BorderRadius.circular(10),
-                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 6, offset: const Offset(0, 2))],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: TextField(
-                                onSubmitted: (v) { if (v.trim().length >= 3) _geocode(v.trim()); },
+                                onSubmitted: (v) {
+                                  if (v.trim().length >= 3) _geocode(v.trim());
+                                },
                                 textDirection: TextDirection.rtl,
                                 textInputAction: TextInputAction.search,
                                 decoration: InputDecoration(
                                   hintText: 'ابحث عن العنوان...',
                                   hintTextDirection: TextDirection.rtl,
-                                  hintStyle: TextStyle(fontSize: 12, color: AppColors.grey.withValues(alpha: 0.5)),
+                                  hintStyle: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.grey.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
                                   prefixIcon: _geocoding
-                                      ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
-                                      : const Icon(Icons.search, color: AppColors.grey, size: 18),
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.search,
+                                          color: AppColors.grey,
+                                          size: 18,
+                                        ),
                                   border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
                                   isDense: true,
                                 ),
                               ),
@@ -450,56 +736,97 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                           ),
                           // ── زر الموقع الحالي ──
                           Positioned(
-                            top: 56, right: 10,
+                            top: 56,
+                            right: 10,
                             child: GestureDetector(
                               onTap: _pickCurrentLocation,
                               child: Container(
-                                width: 36, height: 36,
+                                width: 36,
+                                height: 36,
                                 decoration: BoxDecoration(
                                   color: AppColors.white,
                                   borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 5)],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      blurRadius: 5,
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(Icons.my_location, color: AppColors.primary, size: 18),
+                                child: const Icon(
+                                  Icons.my_location,
+                                  color: AppColors.primary,
+                                  size: 18,
+                                ),
                               ),
                             ),
                           ),
                           // ── حالة الموقع ──
                           Positioned(
-                            bottom: 10, left: 10, right: 10,
+                            bottom: 10,
+                            left: 10,
+                            right: 10,
                             child: _selectedLocation != null
                                 ? Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.primary.withValues(alpha: 0.9),
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.9,
+                                      ),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.check_circle, color: Colors.white, size: 14),
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
                                         const SizedBox(width: 6),
                                         Expanded(
                                           child: Text(
                                             '${_selectedLocation!.latitude.toStringAsFixed(4)}, ${_selectedLocation!.longitude.toStringAsFixed(4)}',
-                                            style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
                                   )
                                 : Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFFFF8E1),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: const Row(
                                       children: [
-                                        Icon(Icons.info_outline, color: Color(0xFFF9A825), size: 14),
+                                        Icon(
+                                          Icons.info_outline,
+                                          color: Color(0xFFF9A825),
+                                          size: 14,
+                                        ),
                                         SizedBox(width: 6),
                                         Expanded(
-                                          child: Text('ابحث عن العنوان أو اضغط على أيقونة الموقع',
-                                              style: TextStyle(fontSize: 11, color: Color(0xFFE65100), fontWeight: FontWeight.w500)),
+                                          child: Text(
+                                            'ابحث عن العنوان أو اضغط على أيقونة الموقع',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFFE65100),
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -521,19 +848,39 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.white,
-                  disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  disabledBackgroundColor: AppColors.primary.withValues(
+                    alpha: 0.6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: _saving
-                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.white))
-                    : const Text('حفظ التعديلات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: AppColors.white,
+                        ),
+                      )
+                    : const Text(
+                        'حفظ التعديلات',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 8),
             Center(
               child: Text(
                 'المرافق تُعدَّل من صفحة تفاصيل العقار',
-                style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.8)),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.grey.withValues(alpha: 0.8),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -544,39 +891,70 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   }
 
   Widget _card(Widget child) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
         ),
-        child: child,
-      );
+      ],
+    ),
+    child: child,
+  );
 
   static const Map<String, String> _typeMap = {
-    'فيلا': 'villa', 'شقة': 'apartment', 'مكتب': 'office', 'دوبلكس': 'duplex',
-    'استوديو': 'studio', 'بنتهاوس': 'penthouse', 'تجاري': 'commercial', 'مزرعة': 'farm',
+    'فيلا': 'villa',
+    'شقة': 'apartment',
+    'مكتب': 'office',
+    'دوبلكس': 'duplex',
+    'استوديو': 'studio',
+    'بنتهاوس': 'penthouse',
+    'تجاري': 'commercial',
+    'مزرعة': 'farm',
   };
   static const Map<String, String> _cityMap = {
-    'الرياض': 'Riyadh', 'جدة': 'Jeddah', 'الدمام': 'Dammam', 'الخبر': 'Khobar',
-    'مكة': 'Makkah', 'المدينة': 'Madinah', 'أبها': 'Abha', 'تبوك': 'Tabuk',
+    'الرياض': 'Riyadh',
+    'جدة': 'Jeddah',
+    'الدمام': 'Dammam',
+    'الخبر': 'Khobar',
+    'مكة': 'Makkah',
+    'المدينة': 'Madinah',
+    'أبها': 'Abha',
+    'تبوك': 'Tabuk',
   };
   static const Map<String, String> _furnishingMap = {
-    'مفروش': 'furnished', 'غير مفروش': 'unfurnished', 'شبه مفروش': 'semi-furnished',
+    'مفروش': 'furnished',
+    'غير مفروش': 'unfurnished',
+    'شبه مفروش': 'semi-furnished',
   };
   static const Map<String, String> _periodMap = {
-    'يومياً': 'daily', 'شهرياً': 'monthly', 'سنوياً': 'yearly',
+    'يومياً': 'daily',
+    'شهرياً': 'monthly',
+    'سنوياً': 'yearly',
   };
 
   static String _typeLabel(String t) => _typeMap.entries
-      .firstWhere((e) => e.value == t, orElse: () => const MapEntry('شقة', 'apartment'))
+      .firstWhere(
+        (e) => e.value == t,
+        orElse: () => const MapEntry('شقة', 'apartment'),
+      )
       .key;
   static String _cityLabel(String? c) => _cityMap.entries
-      .firstWhere((e) => e.value == c, orElse: () => const MapEntry('الرياض', 'Riyadh'))
+      .firstWhere(
+        (e) => e.value == c,
+        orElse: () => const MapEntry('الرياض', 'Riyadh'),
+      )
       .key;
   static String _furnishingLabel(String? f) => _furnishingMap.entries
-      .firstWhere((e) => e.value == f, orElse: () => const MapEntry('مفروش', 'furnished'))
+      .firstWhere(
+        (e) => e.value == f,
+        orElse: () => const MapEntry('مفروش', 'furnished'),
+      )
       .key;
   static String _periodLabel(String p) {
     switch (p) {
@@ -597,8 +975,14 @@ class _FieldLabel extends StatelessWidget {
   final String text;
   const _FieldLabel(this.text);
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.bold,
+      color: AppColors.darkText,
+    ),
+  );
 }
 
 class _Input extends StatelessWidget {
@@ -607,30 +991,42 @@ class _Input extends StatelessWidget {
   final int maxLines;
   final bool number;
 
-  const _Input({required this.controller, required this.hint, this.maxLines = 1, this.number = false});
+  const _Input({
+    required this.controller,
+    required this.hint,
+    this.maxLines = 1,
+    this.number = false,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.fieldBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.fieldBorder),
+    decoration: BoxDecoration(
+      color: AppColors.fieldBg,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.fieldBorder),
+    ),
+    child: TextField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: number
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : null,
+      inputFormatters: number
+          ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9,]'))]
+          : null,
+      textInputAction: TextInputAction.next,
+      style: const TextStyle(fontSize: 14, color: AppColors.darkText),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(fontSize: 14, color: AppColors.grey),
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
         ),
-        child: TextField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : null,
-          inputFormatters: number ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9,]'))] : null,
-          textInputAction: TextInputAction.next,
-          style: const TextStyle(fontSize: 14, color: AppColors.darkText),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(fontSize: 14, color: AppColors.grey),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          ),
-        ),
-      );
+      ),
+    ),
+  );
 }
 
 class _Dropdown extends StatelessWidget {
@@ -638,7 +1034,12 @@ class _Dropdown extends StatelessWidget {
   final String value;
   final List<String> items;
   final ValueChanged<String> onChanged;
-  const _Dropdown({required this.label, required this.value, required this.items, required this.onChanged});
+  const _Dropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -662,7 +1063,14 @@ class _Dropdown extends StatelessWidget {
             dropdownColor: AppColors.white,
             style: const TextStyle(fontSize: 14, color: AppColors.darkText),
             icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.grey),
-            items: items.map((it) => DropdownMenuItem(value: it, child: Text(it, overflow: TextOverflow.ellipsis))).toList(),
+            items: items
+                .map(
+                  (it) => DropdownMenuItem(
+                    value: it,
+                    child: Text(it, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
             onChanged: (v) {
               if (v != null) onChanged(v);
             },
@@ -678,7 +1086,12 @@ class _CountStepper extends StatelessWidget {
   final IconData icon;
   final int value;
   final ValueChanged<int> onChanged;
-  const _CountStepper({required this.label, required this.icon, required this.value, required this.onChanged});
+  const _CountStepper({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -696,7 +1109,13 @@ class _CountStepper extends StatelessWidget {
             children: [
               Icon(icon, size: 14, color: AppColors.grey),
               const SizedBox(width: 3),
-              Flexible(child: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey), overflow: TextOverflow.ellipsis)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontSize: 11, color: AppColors.grey),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -705,8 +1124,22 @@ class _CountStepper extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _stepBtn(Icons.remove, () => onChanged((value - 1).clamp(1, 99))),
-                SizedBox(width: 34, child: Text('$value', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.darkText), textAlign: TextAlign.center)),
+                _stepBtn(
+                  Icons.remove,
+                  () => onChanged((value - 1).clamp(1, 99)),
+                ),
+                SizedBox(
+                  width: 34,
+                  child: Text(
+                    '$value',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkText,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 _stepBtn(Icons.add, () => onChanged((value + 1).clamp(1, 99))),
               ],
             ),
@@ -717,13 +1150,17 @@ class _CountStepper extends StatelessWidget {
   }
 
   Widget _stepBtn(IconData icon, VoidCallback onTap) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 26, height: 26,
-          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, size: 16, color: AppColors.primary),
-        ),
-      );
+    onTap: onTap,
+    child: Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, size: 16, color: AppColors.primary),
+    ),
+  );
 }
 
 class _PriceInput extends StatelessWidget {
@@ -733,29 +1170,31 @@ class _PriceInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey)),
-          const SizedBox(height: 4),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.fieldBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.fieldBorder),
-            ),
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,]'))],
-              style: const TextStyle(fontSize: 14, color: AppColors.darkText),
-              decoration: const InputDecoration(
-                hintText: '0',
-                hintStyle: TextStyle(fontSize: 14, color: AppColors.grey),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-              ),
-            ),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey)),
+      const SizedBox(height: 4),
+      Container(
+        decoration: BoxDecoration(
+          color: AppColors.fieldBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.fieldBorder),
+        ),
+        child: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9,]')),
+          ],
+          style: const TextStyle(fontSize: 14, color: AppColors.darkText),
+          decoration: const InputDecoration(
+            hintText: '0',
+            hintStyle: TextStyle(fontSize: 14, color: AppColors.grey),
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }

@@ -164,12 +164,9 @@ class PropertyRepository {
     double? longitude,
   }) async {
     debugPrint('📤 Creating property at ${AppConfig.ownerProperties}');
-    debugPrint('📦 Body: ${jsonEncode({
-      'title': title,
-      'property_type': propertyType,
-      'status': status,
-      'period': period,
-    })}');
+    debugPrint(
+      '📦 Body: ${jsonEncode({'title': title, 'property_type': propertyType, 'status': status, 'period': period})}',
+    );
     final res = await _api.post(
       AppConfig.ownerProperties,
       body: {
@@ -211,7 +208,9 @@ class PropertyRepository {
       return ApiPropertyDetailResponse.fromJson(data).toProperty();
     } catch (_) {
       if (data['id'] != null) {
-        return ApiProperty.fromJson(Map<String, dynamic>.from(data)).toProperty();
+        return ApiProperty.fromJson(
+          Map<String, dynamic>.from(data),
+        ).toProperty();
       }
       rethrow;
     }
@@ -229,10 +228,14 @@ class PropertyRepository {
     required List<String> files,
   }) async {
     final multipartFiles = await Future.wait(
-      files.map((path) => MultipartFile.fromFile(path, filename: path.split('/').last)),
+      files.map(
+        (path) => MultipartFile.fromFile(path, filename: path.split('/').last),
+      ),
     );
 
-    debugPrint('📤 Uploading ${files.length} images to ${AppConfig.ownerPropertyImages(propertyId)}');
+    debugPrint(
+      '📤 Uploading ${files.length} images to ${AppConfig.ownerPropertyImages(propertyId)}',
+    );
     final res = await _api.upload(
       AppConfig.ownerPropertyImages(propertyId),
       files: multipartFiles,
@@ -256,7 +259,9 @@ class PropertyRepository {
     required int propertyId,
     required int imageId,
   }) async {
-    final res = await _api.delete(AppConfig.ownerPropertyImage(propertyId, imageId));
+    final res = await _api.delete(
+      AppConfig.ownerPropertyImage(propertyId, imageId),
+    );
     final data = res.data;
     if (data is Map<String, dynamic>) return data['success'] == true;
     return false;
@@ -267,7 +272,10 @@ class PropertyRepository {
     required int propertyId,
     required String filePath,
   }) async {
-    final file = await MultipartFile.fromFile(filePath, filename: filePath.split('/').last);
+    final file = await MultipartFile.fromFile(
+      filePath,
+      filename: filePath.split('/').last,
+    );
     final res = await _api.upload(
       AppConfig.ownerPropertyVideo(propertyId),
       files: [file],
@@ -281,7 +289,10 @@ class PropertyRepository {
   // ===== Owner - My Properties =====
 
   /// قائمة عقارات المالك الحالية من السيرفر (يتطلب تسجيل دخول المالك).
-  Future<List<Property>> fetchOwnerMyProperties({int page = 1, int limit = 50}) async {
+  Future<List<Property>> fetchOwnerMyProperties({
+    int page = 1,
+    int limit = 50,
+  }) async {
     final res = await _api.get(
       AppConfig.ownerMyProperties,
       query: {'page': page, 'limit': limit},
@@ -338,6 +349,7 @@ class PropertyRepository {
     required Property current,
     int? beds,
     int? baths,
+    int? kitchens,
     int? guests,
     num? area,
     String? title,
@@ -347,6 +359,11 @@ class PropertyRepository {
     String? propertyType,
     String? furnishing,
     String? period,
+    String? status,
+    String? floor,
+    String? address,
+    String? buildingNumber,
+    String? cancellationPolicy,
     Map<String, num>? prices,
     List<String>? amenities,
     List<String>? primaryAmenities,
@@ -363,25 +380,28 @@ class PropertyRepository {
         'title': title ?? current.title,
         'description': description ?? current.description,
         'location': location ?? current.location,
-        'city': city ?? current.city ?? 'Riyadh',
+        'city': city ?? current.city ?? '',
         'property_type': propertyType ?? current.type,
         'furnishing': furnishing ?? current.furnishing ?? 'furnished',
         'area': area ?? current.area,
         'prices': prices ?? current.prices ?? {},
         'period': _toPeriodKey(period ?? current.period),
-        'status': 'available',
+        'status': status ?? _statusValue(current),
         'beds': beds ?? current.bedrooms,
         'baths': baths ?? current.bathrooms,
-        'kitchens': 0,
+        'kitchens': kitchens ?? current.kitchens,
         'guests': guests ?? current.guests,
-        'floor': current.floor,
+        'floor': floor ?? current.floor,
+        'address': address ?? current.address,
+        'building_number': buildingNumber ?? current.buildingNumber,
         'amenities': amenities ?? current.amenities,
         'primary_amenities': primaryAmenities ?? current.primaryAmenities,
         'secondary_amenities': secondaryAmenities ?? current.secondaryAmenities,
         'kitchen_amenities': kitchenAmenities ?? current.kitchenAmenities,
         'bathroom_amenities': bathroomAmenities ?? current.bathroomAmenities,
         'property_features': propertyFeatures ?? current.features,
-        'cancellation_policy': 'Flexible',
+        'cancellation_policy':
+            cancellationPolicy ?? current.cancellationPolicy ?? 'Flexible',
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
       },
@@ -391,6 +411,13 @@ class PropertyRepository {
       throw const FormatException('استجابة غير صالحة');
     }
     return ApiPropertyDetailResponse.fromJson(data).toProperty();
+  }
+
+  /// تحويل حالة العقار إلى القيمة التي يفهمها الـ Backend.
+  static String _statusValue(Property p) {
+    final s = '${p.status ?? ''} ${p.badge1}'.toLowerCase();
+    if (s.contains('rent') || s.contains('مؤجر')) return 'rented';
+    return 'available';
   }
 
   // ===== Favorites =====
@@ -424,8 +451,9 @@ class PropertyRepository {
         }
       }
 
-      final firstImage = AppConfig.assetUrl(j['image'] as String? ??
-          (images.isNotEmpty ? images.first : null));
+      final firstImage = AppConfig.assetUrl(
+        j['image'] as String? ?? (images.isNotEmpty ? images.first : null),
+      );
 
       return Property(
         id: (j['id'] as num?)?.toInt(),
@@ -444,7 +472,10 @@ class PropertyRepository {
         badge1: j['status'] as String? ?? 'متاح',
         isFavorite: true,
         imageUrl: firstImage,
-        gallery: images.map(AppConfig.assetUrl).where((u) => u.isNotEmpty).toList(),
+        gallery: images
+            .map(AppConfig.assetUrl)
+            .where((u) => u.isNotEmpty)
+            .toList(),
         status: j['status'] as String?,
       );
     }).toList();
@@ -529,10 +560,7 @@ class PropertyRepository {
     int page = 1,
     int limit = 12,
   }) async {
-    final query = <String, dynamic>{
-      'page': page,
-      'limit': limit,
-    };
+    final query = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) query['search'] = search;
     if (city != null && city.isNotEmpty) query['city'] = city;
     if (type != null && type.isNotEmpty) query['type'] = type;
@@ -581,15 +609,23 @@ class SearchResult {
     final pagination = json['pagination'];
     final list = raw is List
         ? raw
-            .whereType<Map>()
-            .map((e) => ApiProperty.fromJson(Map<String, dynamic>.from(e)).toProperty())
-            .toList()
+              .whereType<Map>()
+              .map(
+                (e) => ApiProperty.fromJson(
+                  Map<String, dynamic>.from(e),
+                ).toProperty(),
+              )
+              .toList()
         : const <Property>[];
     return SearchResult(
       properties: list,
-      total: pagination is Map ? (pagination['total'] as num?)?.toInt() ?? 0 : 0,
+      total: pagination is Map
+          ? (pagination['total'] as num?)?.toInt() ?? 0
+          : 0,
       page: pagination is Map ? (pagination['page'] as num?)?.toInt() ?? 1 : 1,
-      pages: pagination is Map ? (pagination['pages'] as num?)?.toInt() ?? 1 : 1,
+      pages: pagination is Map
+          ? (pagination['pages'] as num?)?.toInt() ?? 1
+          : 1,
     );
   }
 }
@@ -614,12 +650,21 @@ class PropertyFilters {
     final ratingsRaw = json['ratings'];
     final priceRaw = json['priceRange'];
     return PropertyFilters(
-      propertyTypes: types is List ? types.whereType<String>().toList() : const [],
-      cities: citiesRaw is List ? citiesRaw.whereType<String>().toList() : const [],
-      ratings: ratingsRaw is List
-          ? ratingsRaw.whereType<Map>().map((e) => RatingFilter.fromJson(Map<String, dynamic>.from(e))).toList()
+      propertyTypes: types is List
+          ? types.whereType<String>().toList()
           : const [],
-      priceRange: priceRaw is Map ? PriceRangeFilter.fromJson(Map<String, dynamic>.from(priceRaw)) : null,
+      cities: citiesRaw is List
+          ? citiesRaw.whereType<String>().toList()
+          : const [],
+      ratings: ratingsRaw is List
+          ? ratingsRaw
+                .whereType<Map>()
+                .map((e) => RatingFilter.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+          : const [],
+      priceRange: priceRaw is Map
+          ? PriceRangeFilter.fromJson(Map<String, dynamic>.from(priceRaw))
+          : null,
     );
   }
 }
@@ -629,16 +674,17 @@ class RatingFilter {
   final int stars;
   const RatingFilter({required this.value, required this.stars});
   factory RatingFilter.fromJson(Map<String, dynamic> json) => RatingFilter(
-        value: json['value'] as String? ?? '',
-        stars: (json['stars'] as num?)?.toInt() ?? 0,
-      );
+    value: json['value'] as String? ?? '',
+    stars: (json['stars'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class PriceRangeFilter {
   final num min;
   final num max;
   const PriceRangeFilter({this.min = 0, this.max = 1000});
-  factory PriceRangeFilter.fromJson(Map<String, dynamic> json) => PriceRangeFilter(
+  factory PriceRangeFilter.fromJson(Map<String, dynamic> json) =>
+      PriceRangeFilter(
         min: json['min'] as num? ?? 0,
         max: json['max'] as num? ?? 1000,
       );
@@ -651,14 +697,19 @@ class UploadedImage {
   final String? alt;
   final bool isPrimary;
 
-  const UploadedImage({required this.id, required this.src, this.alt, this.isPrimary = false});
+  const UploadedImage({
+    required this.id,
+    required this.src,
+    this.alt,
+    this.isPrimary = false,
+  });
 
   factory UploadedImage.fromJson(Map<String, dynamic> json) => UploadedImage(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        src: json['src'] as String? ?? json['path'] as String? ?? '',
-        alt: json['alt'] as String?,
-        isPrimary: json['isPrimary'] == true,
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    src: json['src'] as String? ?? json['path'] as String? ?? '',
+    alt: json['alt'] as String?,
+    isPrimary: json['isPrimary'] == true,
+  );
 
   String get fullUrl => AppConfig.assetUrl(src);
 }

@@ -10,14 +10,14 @@ import '../../widgets/video_player_widget.dart';
 import '../add_property/upload_images_screen.dart';
 import '../edit_property/edit_property_screen.dart';
 import '../property_map/property_map_screen.dart';
-import '../../core/utils/location_helper.dart';
 
 class OwnerPropertyDetailScreen extends StatefulWidget {
   final Property property;
   const OwnerPropertyDetailScreen({super.key, required this.property});
 
   @override
-  State<OwnerPropertyDetailScreen> createState() => _OwnerPropertyDetailScreenState();
+  State<OwnerPropertyDetailScreen> createState() =>
+      _OwnerPropertyDetailScreenState();
 }
 
 class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
@@ -29,8 +29,13 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
 
   late int _beds;
   late int _baths;
+  late int _kitchens;
   late int _guests;
   late double _area;
+
+  late final TextEditingController _dailyCtrl;
+  late final TextEditingController _monthlyCtrl;
+  late final TextEditingController _yearlyCtrl;
 
   late List<String> _kitchen;
   late List<String> _bathroom;
@@ -41,6 +46,9 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _dailyCtrl = TextEditingController();
+    _monthlyCtrl = TextEditingController();
+    _yearlyCtrl = TextEditingController();
     _property = widget.property;
     _sync();
     if (_property.id != null) {
@@ -50,16 +58,33 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _dailyCtrl.dispose();
+    _monthlyCtrl.dispose();
+    _yearlyCtrl.dispose();
+    super.dispose();
+  }
+
   void _sync() {
     _beds = _property.bedrooms;
     _baths = _property.bathrooms;
+    _kitchens = _property.kitchens;
     _guests = _property.guests;
     _area = _property.area;
+    _dailyCtrl.text = _numText(_property.prices?['daily']);
+    _monthlyCtrl.text = _numText(_property.prices?['monthly']);
+    _yearlyCtrl.text = _numText(_property.prices?['yearly']);
     _kitchen = List.of(_property.kitchenAmenities);
     _bathroom = List.of(_property.bathroomAmenities);
     _primary = List.of(_property.primaryAmenities);
     _secondary = List.of(_property.secondaryAmenities);
     _features = List.of(_property.features);
+  }
+
+  static String _numText(num? v) {
+    if (v == null || v == 0) return '';
+    return v.toInt().toString();
   }
 
   Future<void> _loadDetail() async {
@@ -109,16 +134,22 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         _property = updated;
         _sync();
       });
-      Get.snackbar('تم التحديث', 'تم تغيير حالة العقار بنجاح',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
+      Get.snackbar(
+        'تم التحديث',
+        'تم تغيير حالة العقار بنجاح',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+      );
     } catch (e) {
       if (!mounted) return;
-      Get.snackbar('فشل التحديث', 'تعذر تغيير حالة العقار، حاول مرة أخرى.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFFC62828),
-          colorText: AppColors.white);
+      Get.snackbar(
+        'فشل التحديث',
+        'تعذر تغيير حالة العقار، حاول مرة أخرى.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFC62828),
+        colorText: AppColors.white,
+      );
     } finally {
       if (mounted) setState(() => _changingStatus = false);
     }
@@ -130,8 +161,13 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('حذف العقار', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('هل أنت متأكد من حذف "${_property.title}"؟\nلا يمكن التراجع عن هذا الإجراء.'),
+        title: const Text(
+          'حذف العقار',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'هل أنت متأكد من حذف "${_property.title}"؟\nلا يمكن التراجع عن هذا الإجراء.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -139,7 +175,13 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('حذف', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.bold)),
+            child: const Text(
+              'حذف',
+              style: TextStyle(
+                color: Color(0xFFC62828),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -152,16 +194,22 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
       Get.find<AppController>().removeOwnerProperty(_property.id!);
       if (!mounted) return;
       Get.back();
-      Get.snackbar('تم الحذف', 'تم حذف العقار بنجاح',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
+      Get.snackbar(
+        'تم الحذف',
+        'تم حذف العقار بنجاح',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+      );
     } catch (e) {
       if (!mounted) return;
-      Get.snackbar('فشل الحذف', 'تعذر حذف العقار، حاول مرة أخرى.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFFC62828),
-          colorText: AppColors.white);
+      Get.snackbar(
+        'فشل الحذف',
+        'تعذر حذف العقار، حاول مرة أخرى.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFC62828),
+        colorText: AppColors.white,
+      );
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
@@ -175,8 +223,21 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         current: _property,
         beds: _beds,
         baths: _baths,
+        kitchens: _kitchens,
         guests: _guests,
         area: _area,
+        prices: {
+          'daily':
+              num.tryParse(_dailyCtrl.text) ?? _property.prices?['daily'] ?? 0,
+          'monthly':
+              num.tryParse(_monthlyCtrl.text) ??
+              _property.prices?['monthly'] ??
+              0,
+          'yearly':
+              num.tryParse(_yearlyCtrl.text) ??
+              _property.prices?['yearly'] ??
+              0,
+        },
         amenities: _primary,
         primaryAmenities: _primary,
         secondaryAmenities: _secondary,
@@ -190,30 +251,47 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         _property = updated;
         _sync();
       });
-      Get.snackbar('تم الحفظ', 'تم تحديث بيانات العقار بنجاح',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.primary,
-          colorText: AppColors.white);
+      Get.snackbar(
+        'تم الحفظ',
+        'تم تحديث بيانات العقار بنجاح',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+      );
     } catch (e) {
       if (!mounted) return;
-      Get.snackbar('فشل الحفظ', 'تعذر تحديث العقار، حاول مرة أخرى.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFFC62828),
-          colorText: AppColors.white);
+      Get.snackbar(
+        'فشل الحفظ',
+        'تعذر تحديث العقار، حاول مرة أخرى.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFC62828),
+        colorText: AppColors.white,
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  bool get _dirty => _beds != _property.bedrooms ||
+  bool get _dirty =>
+      _beds != _property.bedrooms ||
       _baths != _property.bathrooms ||
+      _kitchens != _property.kitchens ||
       _guests != _property.guests ||
       _area != _property.area ||
+      _priceChanged(_dailyCtrl.text, 'daily') ||
+      _priceChanged(_monthlyCtrl.text, 'monthly') ||
+      _priceChanged(_yearlyCtrl.text, 'yearly') ||
       !_sameList(_kitchen, _property.kitchenAmenities) ||
       !_sameList(_bathroom, _property.bathroomAmenities) ||
       !_sameList(_primary, _property.primaryAmenities) ||
       !_sameList(_secondary, _property.secondaryAmenities) ||
       !_sameList(_features, _property.features);
+
+  bool _priceChanged(String text, String key) {
+    final entered = num.tryParse(text.trim());
+    final current = _property.prices?[key];
+    return (entered ?? 0) != (current ?? 0);
+  }
 
   static bool _sameList(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
@@ -260,14 +338,21 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         .where((o) => !current.contains(o.$1) && !current.contains(o.$2))
         .toList();
     if (available.isEmpty) {
-      Get.snackbar('لا يوجد مرافق اضافية', 'تمت إضافة كل المرافق المتاحة.',
-          snackPosition: SnackPosition.BOTTOM, backgroundColor: AppColors.primary, colorText: AppColors.white);
+      Get.snackbar(
+        'لا يوجد مرافق اضافية',
+        'تمت إضافة كل المرافق المتاحة.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.primary,
+        colorText: AppColors.white,
+      );
       return;
     }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -275,25 +360,42 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('إضافة مرافق', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
+              const Text(
+                'إضافة مرافق',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
               const SizedBox(height: 12),
               Flexible(
                 child: Wrap(
-                  spacing: 8, runSpacing: 8,
-                  children: available.map((o) => ChoiceChip(
-                    label: Text(o.$1, style: const TextStyle(fontSize: 12)),
-                    selected: false,
-                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                    onSelected: (v) {
-                      final list = _groupFor(group);
-                      if (!list.contains(o.$2) && !list.contains(o.$1)) {
-                        list.add(o.$2);
-                        _setGroup(group, list);
-                        Navigator.pop(ctx);
-                        setState(() {});
-                      }
-                    },
-                  )).toList(),
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: available
+                      .map(
+                        (o) => ChoiceChip(
+                          label: Text(
+                            o.$1,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          selected: false,
+                          selectedColor: AppColors.primary.withValues(
+                            alpha: 0.15,
+                          ),
+                          onSelected: (v) {
+                            final list = _groupFor(group);
+                            if (!list.contains(o.$2) && !list.contains(o.$1)) {
+                              list.add(o.$2);
+                              _setGroup(group, list);
+                              Navigator.pop(ctx);
+                              setState(() {});
+                            }
+                          },
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -319,7 +421,14 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
             onPressed: () => Get.back(),
           ),
         ),
-        title: const Text('تفاصيل العقار', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+        title: const Text(
+          'تفاصيل العقار',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.darkText,
+          ),
+        ),
         actions: [
           if (_property.id != null)
             Padding(
@@ -327,8 +436,18 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
               child: IconButton(
                 tooltip: 'حذف العقار',
                 icon: _deleting
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC62828)))
-                    : const Icon(Icons.delete_outline, color: Color(0xFFC62828)),
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFC62828),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.delete_outline,
+                        color: Color(0xFFC62828),
+                      ),
                 onPressed: _deleting ? null : _deleteProperty,
               ),
             ),
@@ -344,7 +463,9 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : RefreshIndicator(
               color: AppColors.primary,
               onRefresh: _loadDetail,
@@ -362,18 +483,35 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                              child: _OwnerImageGallery(property: _property, onDeleted: () => _loadDetail()),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(16),
+                              ),
+                              child: _OwnerImageGallery(
+                                property: _property,
+                                onDeleted: () => _loadDetail(),
+                              ),
                             ),
-                            if (_property.videoUrl != null && _property.videoUrl!.isNotEmpty)
+                            if (_property.videoUrl != null &&
+                                _property.videoUrl!.isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  0,
+                                ),
                                 child: SizedBox(
                                   width: double.infinity,
                                   child: ElevatedButton.icon(
@@ -388,15 +526,23 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                                               Center(
                                                 child: AspectRatio(
                                                   aspectRatio: 16 / 9,
-                                                  child: VideoPlayerWidget(videoUrl: _property.videoUrl!),
+                                                  child: VideoPlayerWidget(
+                                                    videoUrl:
+                                                        _property.videoUrl!,
+                                                  ),
                                                 ),
                                               ),
                                               Positioned(
                                                 top: 16,
                                                 left: 16,
                                                 child: IconButton(
-                                                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                                                  onPressed: () => Navigator.pop(ctx),
+                                                  icon: const Icon(
+                                                    Icons.close,
+                                                    color: Colors.white,
+                                                    size: 30,
+                                                  ),
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx),
                                                 ),
                                               ),
                                             ],
@@ -404,37 +550,65 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                                         ),
                                       );
                                     },
-                                    icon: const Icon(Icons.play_circle_fill, size: 20),
-                                    label: const Text('مشاهدة فيديو العقار', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    icon: const Icon(
+                                      Icons.play_circle_fill,
+                                      size: 20,
+                                    ),
+                                    label: const Text(
+                                      'مشاهدة فيديو العقار',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.primary,
                                       foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             if (_property.id != null)
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  8,
+                                ),
                                 child: SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton.icon(
                                     onPressed: () async {
-                                      await Get.to(() => UploadImagesScreen(
-                                        propertyId: _property.id!,
-                                        propertyTitle: _property.title,
-                                      ));
+                                      await Get.to(
+                                        () => UploadImagesScreen(
+                                          propertyId: _property.id!,
+                                          propertyTitle: _property.title,
+                                        ),
+                                      );
                                       _loadDetail();
                                     },
-                                    icon: const Icon(Icons.add_a_photo, size: 18),
+                                    icon: const Icon(
+                                      Icons.add_a_photo,
+                                      size: 18,
+                                    ),
                                     label: const Text('إضافة صور / فيديو'),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: AppColors.primary,
-                                      side: const BorderSide(color: AppColors.primary),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      side: const BorderSide(
+                                        color: AppColors.primary,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -447,48 +621,98 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(_property.title,
-                                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.black),
-                                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                                        child: Text(
+                                          _property.title,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.black,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primary.withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(20),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
                                         ),
-                                        child: Text('${_typeLabel(_property.type)} · ${_furnishingLabel(_property.furnishing)}',
-                                            style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
-                                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${_typeLabel(_property.type)} · ${_furnishingLabel(_property.furnishing)}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
                                   Row(
                                     children: [
-                                      const Icon(Icons.location_on, color: AppColors.grey, size: 16),
+                                      const Icon(
+                                        Icons.location_on,
+                                        color: AppColors.grey,
+                                        size: 16,
+                                      ),
                                       const SizedBox(width: 4),
                                       Expanded(
-                                        child: Text(_property.location,
-                                            style: const TextStyle(fontSize: 12, color: AppColors.grey),
-                                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        child: Text(
+                                          _property.location,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.grey,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      if (_property.city != null && _property.city!.isNotEmpty)
+                                      if (_property.city != null &&
+                                          _property.city!.isNotEmpty)
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFF2F4F7),
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
-                                          child: Text(_property.city!,
-                                              style: const TextStyle(fontSize: 11, color: AppColors.darkText, fontWeight: FontWeight.w600)),
+                                          child: Text(
+                                            _property.city!,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.darkText,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                         ),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
-                                  Text(_property.description,
-                                      style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.darkText),
-                                      maxLines: 4, overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    _property.description,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      height: 1.6,
+                                      color: AppColors.darkText,
+                                    ),
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ],
                               ),
                             ),
@@ -506,12 +730,25 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('حالة العقار', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
+                            const Text(
+                              'حالة العقار',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                              ),
+                            ),
                             const SizedBox(height: 12),
                             Row(
                               children: [
@@ -552,20 +789,59 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('الأسعار', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
-                            const SizedBox(height: 14),
+                            const Text(
+                              'الأسعار',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'عدّل سعر أي فترة مباشرةً ثم اضغط حفظ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
-                                Expanded(child: _PriceBox(label: 'يومي', value: _priceFor('daily'))),
-                                const SizedBox(width: 10),
-                                Expanded(child: _PriceBox(label: 'شهري', value: _priceFor('monthly'))),
-                                const SizedBox(width: 10),
-                                Expanded(child: _PriceBox(label: 'سنوي', value: _priceFor('yearly'))),
+                                Expanded(
+                                  child: _PriceEditor(
+                                    label: 'يومي',
+                                    controller: _dailyCtrl,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _PriceEditor(
+                                    label: 'شهري',
+                                    controller: _monthlyCtrl,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _PriceEditor(
+                                    label: 'سنوي',
+                                    controller: _yearlyCtrl,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -582,47 +858,78 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('المواصفات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(child: _CountEditor(label: 'غرف النوم', icon: Icons.bed, value: _beds, onChanged: (v) => setState(() => _beds = v))),
-                                const SizedBox(width: 10),
-                                Expanded(child: _CountEditor(label: 'الحمامات', icon: Icons.bathroom, value: _baths, onChanged: (v) => setState(() => _baths = v))),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(child: _CountEditor(label: 'الضيوف', icon: Icons.people, value: _guests, onChanged: (v) => setState(() => _guests = v))),
-                                const SizedBox(width: 10),
-                                Expanded(child: _AreaEditor(label: 'المساحة (م²)', value: _area, onChanged: (v) => setState(() => _area = v))),
-                              ],
-                            ),
-                            if (_dirty) ...[
-                              const SizedBox(height: 16),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 46,
-                                child: ElevatedButton(
-                                  onPressed: _saving ? null : _save,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: AppColors.white,
-                                    disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  child: _saving
-                                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.white))
-                                      : const Text('حفظ التغييرات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                ),
+                            const Text(
+                              'المواصفات',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
                               ),
-                            ],
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _CountEditor(
+                                    label: 'غرف النوم',
+                                    icon: Icons.bed,
+                                    value: _beds,
+                                    onChanged: (v) => setState(() => _beds = v),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _CountEditor(
+                                    label: 'الحمامات',
+                                    icon: Icons.bathroom,
+                                    value: _baths,
+                                    onChanged: (v) =>
+                                        setState(() => _baths = v),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _CountEditor(
+                                    label: 'المطابخ',
+                                    icon: Icons.kitchen,
+                                    value: _kitchens,
+                                    onChanged: (v) =>
+                                        setState(() => _kitchens = v),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _CountEditor(
+                                    label: 'الضيوف',
+                                    icon: Icons.people,
+                                    value: _guests,
+                                    onChanged: (v) =>
+                                        setState(() => _guests = v),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            _AreaEditor(
+                              label: 'المساحة (م²)',
+                              value: _area,
+                              onChanged: (v) => setState(() => _area = v),
+                            ),
                           ],
                         ),
                       ),
@@ -637,55 +944,73 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                              const Text('المرافق والمواصفات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
-                              const SizedBox(height: 4),
-                              const Text('اضغط على أي مرافق لإزالته، أو أضف من القائمة',
-                                  style: TextStyle(fontSize: 11, color: AppColors.grey)),
-                              const SizedBox(height: 14),
-                              _AmenityGroup(
-                                title: 'المرافق الأساسية',
-                                icon: Icons.star,
-                                items: _primary,
-                                onToggle: (v) => setState(() => _primary = v),
-                                onAdd: () => _addAmenity('primary'),
+                            const Text(
+                              'المرافق والمواصفات',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
                               ),
-                              _AmenityGroup(
-                                title: 'مرافق المطبخ',
-                                icon: Icons.kitchen,
-                                items: _kitchen,
-                                onToggle: (v) => setState(() => _kitchen = v),
-                                onAdd: () => _addAmenity('kitchen'),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'اضغط على أي مرافق لإزالته، أو أضف من القائمة',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.grey,
                               ),
-                              _AmenityGroup(
-                                title: 'مرافق الحمام',
-                                icon: Icons.bathtub,
-                                items: _bathroom,
-                                onToggle: (v) => setState(() => _bathroom = v),
-                                onAdd: () => _addAmenity('bathroom'),
-                              ),
-                              _AmenityGroup(
-                                title: 'خدمات إضافية',
-                                icon: Icons.workspace_premium,
-                                items: _secondary,
-                                onToggle: (v) => setState(() => _secondary = v),
-                                onAdd: () => _addAmenity('secondary'),
-                              ),
-                              _AmenityGroup(
-                                title: 'مميزات العقار',
-                                icon: Icons.workspace_premium,
-                                items: _features,
-                                onToggle: (v) => setState(() => _features = v),
-                                onAdd: () => _addAmenity('features'),
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 14),
+                            _AmenityGroup(
+                              title: 'المرافق الأساسية',
+                              icon: Icons.star,
+                              items: _primary,
+                              onToggle: (v) => setState(() => _primary = v),
+                              onAdd: () => _addAmenity('primary'),
+                            ),
+                            _AmenityGroup(
+                              title: 'مرافق المطبخ',
+                              icon: Icons.kitchen,
+                              items: _kitchen,
+                              onToggle: (v) => setState(() => _kitchen = v),
+                              onAdd: () => _addAmenity('kitchen'),
+                            ),
+                            _AmenityGroup(
+                              title: 'مرافق الحمام',
+                              icon: Icons.bathtub,
+                              items: _bathroom,
+                              onToggle: (v) => setState(() => _bathroom = v),
+                              onAdd: () => _addAmenity('bathroom'),
+                            ),
+                            _AmenityGroup(
+                              title: 'خدمات إضافية',
+                              icon: Icons.workspace_premium,
+                              items: _secondary,
+                              onToggle: (v) => setState(() => _secondary = v),
+                              onAdd: () => _addAmenity('secondary'),
+                            ),
+                            _AmenityGroup(
+                              title: 'مميزات العقار',
+                              icon: Icons.workspace_premium,
+                              items: _features,
+                              onToggle: (v) => setState(() => _features = v),
+                              onAdd: () => _addAmenity('features'),
+                            ),
+                          ],
                         ),
                       ),
+                    ),
                     const SizedBox(height: 16),
                     // ─── Additional info ───
                     Padding(
@@ -696,32 +1021,141 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('معلومات إضافية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
+                            const Text(
+                              'معلومات إضافية',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                              ),
+                            ),
                             const SizedBox(height: 14),
                             Row(
                               children: [
-                                Expanded(child: _InfoChip(label: 'نوع العقار', value: _typeLabel(_property.type))),
+                                Expanded(
+                                  child: _InfoChip(
+                                    label: 'نوع العقار',
+                                    value: _typeLabel(_property.type),
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
-                                Expanded(child: _InfoChip(label: 'التأثيث', value: _furnishingLabel(_property.furnishing))),
+                                Expanded(
+                                  child: _InfoChip(
+                                    label: 'التأثيث',
+                                    value: _furnishingLabel(
+                                      _property.furnishing,
+                                    ),
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
-                                Expanded(child: _InfoChip(label: 'فترة الإيجار', value: _periodLabel(_property.period))),
+                                Expanded(
+                                  child: _InfoChip(
+                                    label: 'فترة الإيجار',
+                                    value: _periodLabel(_property.period),
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 10),
                             Row(
                               children: [
-                                Expanded(child: _InfoChip(label: 'التقييم', value: _property.rating == 0 ? '—' : '${_property.rating} ★')),
+                                Expanded(
+                                  child: _InfoChip(
+                                    label: 'التقييم',
+                                    value: _property.rating == 0
+                                        ? '—'
+                                        : '${_property.rating} ★',
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
-                                Expanded(child: _InfoChip(label: 'التعليقات', value: '${_property.reviewsCount}')),
+                                Expanded(
+                                  child: _InfoChip(
+                                    label: 'التعليقات',
+                                    value: '${_property.reviewsCount}',
+                                  ),
+                                ),
                                 const SizedBox(width: 10),
-                                Expanded(child: _InfoChip(label: 'المعرف', value: '${_property.id ?? '—'}')),
+                                Expanded(
+                                  child: _InfoChip(
+                                    label: 'المعرف',
+                                    value: '${_property.id ?? '—'}',
+                                  ),
+                                ),
                               ],
                             ),
+                            if ((_property.floor ?? '').isNotEmpty ||
+                                (_property.buildingNumber ?? '')
+                                    .isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _InfoChip(
+                                      label: 'الدور',
+                                      value: _property.floor ?? '—',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _InfoChip(
+                                      label: 'رقم المبنى',
+                                      value: _property.buildingNumber ?? '—',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _InfoChip(
+                                      label: 'سياسة الإلغاء',
+                                      value:
+                                          _property.cancellationPolicy ?? '—',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if ((_property.address ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF2F4F7),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.home_outlined,
+                                      size: 16,
+                                      color: AppColors.grey,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _property.address!,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.darkText,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -730,32 +1164,67 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
                     // ─── Location & Map ───
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _OwnerLocationSection(property: _property, onEdit: _openEdit),
+                      child: _OwnerLocationSection(
+                        property: _property,
+                        onEdit: _openEdit,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
+      bottomNavigationBar: (_dirty && !_loading)
+          ? SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 14,
+                      offset: const Offset(0, -3),
+                    ),
+                  ],
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: AppColors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 20),
+                    label: Text(
+                      _saving ? 'جارٍ الحفظ...' : 'حفظ كل التغييرات',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.white,
+                      disabledBackgroundColor: AppColors.primary.withValues(
+                        alpha: 0.6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
     );
-  }
-
-  String _priceFor(String key) {
-    final prices = _property.prices;
-    final v = prices?[key];
-    if (v == null) return '—';
-    return _fmtNum(v);
-  }
-
-  static String _fmtNum(num v) {
-    final asInt = v.toInt();
-    final s = asInt.toString();
-    final buf = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      buf.write(s[i]);
-      final remaining = s.length - i - 1;
-      if (remaining > 0 && remaining % 3 == 0) buf.write(',');
-    }
-    return buf.toString();
   }
 
   String _typeLabel(String type) {
@@ -806,7 +1275,6 @@ class _OwnerPropertyDetailScreenState extends State<OwnerPropertyDetailScreen> {
         return 'شهرياً';
     }
   }
-
 }
 
 // ───── Owner Image Gallery with delete ─────
@@ -825,7 +1293,8 @@ class _OwnerImageGalleryState extends State<_OwnerImageGallery> {
 
   List<String> get _images {
     final urls = <String>[];
-    if (widget.property.imageUrl != null && widget.property.imageUrl!.isNotEmpty) {
+    if (widget.property.imageUrl != null &&
+        widget.property.imageUrl!.isNotEmpty) {
       urls.add(widget.property.imageUrl!);
     }
     for (final g in widget.property.gallery) {
@@ -872,26 +1341,46 @@ class _OwnerImageGalleryState extends State<_OwnerImageGallery> {
               width: double.infinity,
               errorBuilder: (_, _, _) => Container(
                 color: AppColors.darkBlue,
-                child: const Icon(Icons.broken_image, color: AppColors.white, size: 40),
+                child: const Icon(
+                  Icons.broken_image,
+                  color: AppColors.white,
+                  size: 40,
+                ),
               ),
             ),
           ),
           // Status badge
           Positioned(
-            top: 12, right: 12,
+            top: 12,
+            right: 12,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: _statusColor(widget.property.badge1).withValues(alpha: 0.15),
+                color: _statusColor(
+                  widget.property.badge1,
+                ).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: _statusColor(widget.property.badge1))),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _statusColor(widget.property.badge1),
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  Text(widget.property.badge1,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _statusColor(widget.property.badge1))),
+                  Text(
+                    widget.property.badge1,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: _statusColor(widget.property.badge1),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -899,33 +1388,49 @@ class _OwnerImageGalleryState extends State<_OwnerImageGallery> {
           // Property ID
           if (widget.property.id != null)
             Positioned(
-              top: 12, left: 12,
+              top: 12,
+              left: 12,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text('#${widget.property.id}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.white)),
+                child: Text(
+                  '#${widget.property.id}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.white,
+                  ),
+                ),
               ),
             ),
           // Dots indicator
           if (imgs.length > 1)
             Positioned(
               bottom: 8,
-              left: 0, right: 0,
+              left: 0,
+              right: 0,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(imgs.length, (i) => Container(
-                  width: i == _current ? 20 : 6,
-                  height: 6,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: i == _current ? AppColors.white : AppColors.white.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(3),
+                children: List.generate(
+                  imgs.length,
+                  (i) => Container(
+                    width: i == _current ? 20 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: i == _current
+                          ? AppColors.white
+                          : AppColors.white.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
-                )),
+                ),
               ),
             ),
         ],
@@ -934,8 +1439,10 @@ class _OwnerImageGalleryState extends State<_OwnerImageGallery> {
   }
 
   Color _statusColor(String status) {
-    if (status.contains('مؤجر') || status.toLowerCase().contains('rented')) return Colors.orange;
-    if (status.contains('مراجعة') || status.toLowerCase().contains('review')) return Colors.blue;
+    if (status.contains('مؤجر') || status.toLowerCase().contains('rented'))
+      return Colors.orange;
+    if (status.contains('مراجعة') || status.toLowerCase().contains('review'))
+      return Colors.blue;
     return const Color(0xFF4CAF50);
   }
 }
@@ -966,21 +1473,33 @@ class _StatusButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? color.withValues(alpha: 0.12) : AppColors.fieldBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? color : AppColors.fieldBorder, width: selected ? 1.5 : 1),
+          border: Border.all(
+            color: selected ? color : AppColors.fieldBorder,
+            width: selected ? 1.5 : 1,
+          ),
         ),
         child: Column(
           children: [
             if (loading)
-              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary))
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.primary,
+                ),
+              )
             else
               Icon(icon, color: selected ? color : AppColors.grey, size: 20),
             const SizedBox(height: 6),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: selected ? color : AppColors.grey,
-                )),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: selected ? color : AppColors.grey,
+              ),
+            ),
           ],
         ),
       ),
@@ -988,16 +1507,21 @@ class _StatusButton extends StatelessWidget {
   }
 }
 
-// ───── Price box ─────
-class _PriceBox extends StatelessWidget {
+// ───── Editable price field ─────
+class _PriceEditor extends StatelessWidget {
   final String label;
-  final String value;
-  const _PriceBox({required this.label, required this.value});
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  const _PriceEditor({
+    required this.label,
+    required this.controller,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
@@ -1005,9 +1529,30 @@ class _PriceBox extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey)),
-          const SizedBox(height: 4),
-          Text('$value ر.س', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.grey),
+          ),
+          const SizedBox(height: 2),
+          TextField(
+            controller: controller,
+            onChanged: onChanged,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '0',
+              suffixText: 'ر.س',
+              suffixStyle: TextStyle(fontSize: 9, color: AppColors.grey),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 2),
+            ),
+          ),
         ],
       ),
     );
@@ -1020,7 +1565,12 @@ class _CountEditor extends StatelessWidget {
   final IconData icon;
   final int value;
   final ValueChanged<int> onChanged;
-  const _CountEditor({required this.label, required this.icon, required this.value, required this.onChanged});
+  const _CountEditor({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1038,7 +1588,14 @@ class _CountEditor extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: AppColors.grey),
               const SizedBox(width: 4),
-              Flexible(child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.grey), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontSize: 12, color: AppColors.grey),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1048,12 +1605,26 @@ class _CountEditor extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _StepBtn(icon: Icons.remove, onTap: () => onChanged((value - 1).clamp(0, 99))),
+                _StepBtn(
+                  icon: Icons.remove,
+                  onTap: () => onChanged((value - 1).clamp(0, 99)),
+                ),
                 SizedBox(
                   width: 44,
-                  child: Text('$value', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkText), textAlign: TextAlign.center),
+                  child: Text(
+                    '$value',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkText,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                _StepBtn(icon: Icons.add, onTap: () => onChanged((value + 1).clamp(0, 99))),
+                _StepBtn(
+                  icon: Icons.add,
+                  onTap: () => onChanged((value + 1).clamp(0, 99)),
+                ),
               ],
             ),
           ),
@@ -1067,7 +1638,11 @@ class _AreaEditor extends StatelessWidget {
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
-  const _AreaEditor({required this.label, required this.value, required this.onChanged});
+  const _AreaEditor({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1086,7 +1661,14 @@ class _AreaEditor extends StatelessWidget {
             children: [
               const Icon(Icons.square_foot, size: 15, color: AppColors.grey),
               const SizedBox(width: 4),
-              Flexible(child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.grey), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontSize: 12, color: AppColors.grey),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1096,12 +1678,28 @@ class _AreaEditor extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _StepBtn(icon: Icons.remove, onTap: () => onChanged(((intVal - 10).clamp(0, 99999)).toDouble())),
+                _StepBtn(
+                  icon: Icons.remove,
+                  onTap: () =>
+                      onChanged(((intVal - 10).clamp(0, 99999)).toDouble()),
+                ),
                 SizedBox(
                   width: 44,
-                  child: Text('$intVal', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkText), textAlign: TextAlign.center),
+                  child: Text(
+                    '$intVal',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkText,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                _StepBtn(icon: Icons.add, onTap: () => onChanged(((intVal + 10).clamp(0, 99999)).toDouble())),
+                _StepBtn(
+                  icon: Icons.add,
+                  onTap: () =>
+                      onChanged(((intVal + 10).clamp(0, 99999)).toDouble()),
+                ),
               ],
             ),
           ),
@@ -1121,7 +1719,8 @@ class _StepBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 28, height: 28,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           color: AppColors.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
@@ -1158,12 +1757,22 @@ class _AmenityGroup extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.darkText,
+                ),
+              ),
               const Spacer(),
               GestureDetector(
                 onTap: onAdd,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
@@ -1173,7 +1782,14 @@ class _AmenityGroup extends StatelessWidget {
                     children: [
                       Icon(Icons.add, size: 14, color: AppColors.primary),
                       SizedBox(width: 2),
-                      Text('إضافة', style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold)),
+                      Text(
+                        'إضافة',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1182,14 +1798,24 @@ class _AmenityGroup extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           if (items.isEmpty)
-            const Text('لا توجد مرافق مضافة بعد', style: TextStyle(fontSize: 12, color: AppColors.grey))
+            const Text(
+              'لا توجد مرافق مضافة بعد',
+              style: TextStyle(fontSize: 12, color: AppColors.grey),
+            )
           else
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: items.map((a) => _AmenityChip(label: a, onRemove: () {
-                onToggle(items.where((x) => x != a).toList());
-              })).toList(),
+              children: items
+                  .map(
+                    (a) => _AmenityChip(
+                      label: a,
+                      onRemove: () {
+                        onToggle(items.where((x) => x != a).toList());
+                      },
+                    ),
+                  )
+                  .toList(),
             ),
         ],
       ),
@@ -1219,8 +1845,10 @@ class _AmenityChip extends StatelessWidget {
             child: const Icon(Icons.close, size: 14, color: AppColors.primary),
           ),
           const SizedBox(width: 4),
-          Text(AmenityLabels.translate(value),
-              style: const TextStyle(fontSize: 12, color: AppColors.primary)),
+          Text(
+            AmenityLabels.translate(value),
+            style: const TextStyle(fontSize: 12, color: AppColors.primary),
+          ),
         ],
       ),
     );
@@ -1244,9 +1872,21 @@ class _InfoChip extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.grey),
+          ),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.darkText), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkText,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
@@ -1270,11 +1910,17 @@ class _OwnerLocationSection extends StatelessWidget {
   Future<void> _openGoogleMaps() async {
     final lat = property.latitude!;
     final lng = property.longitude!;
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+    );
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
-      Get.snackbar('تنبيه', 'تعذر فتح خرائط جوجل', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'تنبيه',
+        'تعذر فتح خرائط جوجل',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -1290,7 +1936,13 @@ class _OwnerLocationSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1298,16 +1950,29 @@ class _OwnerLocationSection extends StatelessWidget {
           // ── العنوان ──
           Row(
             children: [
-              const Icon(Icons.map_outlined, color: AppColors.primary, size: 20),
+              const Icon(
+                Icons.map_outlined,
+                color: AppColors.primary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
-              const Text('الموقع والخريطة',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.black)),
+              const Text(
+                'الموقع والخريطة',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
               const Spacer(),
               if (!hasCoords)
                 GestureDetector(
                   onTap: onEdit,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
@@ -1315,9 +1980,20 @@ class _OwnerLocationSection extends StatelessWidget {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.edit_location_alt_outlined, size: 14, color: AppColors.primary),
+                        Icon(
+                          Icons.edit_location_alt_outlined,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 4),
-                        Text('تحديد الموقع', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        Text(
+                          'تحديد الموقع',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1334,21 +2010,35 @@ class _OwnerLocationSection extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF8E1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: const Color(0xFFFFC107).withValues(alpha: 0.4),
+                ),
               ),
               child: Column(
                 children: [
-                  const Icon(Icons.location_off_outlined, size: 40, color: Color(0xFFF9A825)),
+                  const Icon(
+                    Icons.location_off_outlined,
+                    size: 40,
+                    color: Color(0xFFF9A825),
+                  ),
                   const SizedBox(height: 10),
                   const Text(
                     'لم يتم تحديد موقع العقار على الخريطة',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE65100),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'اضغط على "تحديد الموقع" أعلاه لإضافة الإحداثيات\nوتمكين العملاء من العثور على العقار بسهولة',
-                    style: TextStyle(fontSize: 12, color: AppColors.grey.withValues(alpha: 0.8), height: 1.5),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.grey.withValues(alpha: 0.8),
+                      height: 1.5,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 14),
@@ -1356,12 +2046,24 @@ class _OwnerLocationSection extends StatelessWidget {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: onEdit,
-                      icon: const Icon(Icons.edit_location_alt, size: 18, color: Colors.white),
-                      label: const Text('إضافة موقع العقار',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                      icon: const Icon(
+                        Icons.edit_location_alt,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'إضافة موقع العقار',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         elevation: 2,
                       ),
@@ -1381,22 +2083,35 @@ class _OwnerLocationSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.place_outlined, color: AppColors.primary, size: 20),
+                  const Icon(
+                    Icons.place_outlined,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          property.location.isEmpty ? 'الموقع على الخريطة' : property.location,
+                          property.location.isEmpty
+                              ? 'الموقع على الخريطة'
+                              : property.location,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
-                          style: TextStyle(fontSize: 11, color: AppColors.grey.withValues(alpha: 0.7)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.grey.withValues(alpha: 0.7),
+                          ),
                         ),
                       ],
                     ),
@@ -1404,7 +2119,10 @@ class _OwnerLocationSection extends StatelessWidget {
                   GestureDetector(
                     onTap: _openGoogleMaps,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(8),
@@ -1412,9 +2130,20 @@ class _OwnerLocationSection extends StatelessWidget {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.directions_outlined, size: 14, color: Colors.white),
+                          Icon(
+                            Icons.directions_outlined,
+                            size: 14,
+                            color: Colors.white,
+                          ),
                           SizedBox(width: 4),
-                          Text('اتجاهات', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                          Text(
+                            'اتجاهات',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1426,13 +2155,16 @@ class _OwnerLocationSection extends StatelessWidget {
             // ── الخريطة المصغرة (اضغط لفتح الخريطة الكاملة) ──
             GestureDetector(
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => PropertyMapScreen(
-                    latitude: lat,
-                    longitude: lng,
-                    address: property.location,
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PropertyMapScreen(
+                      latitude: lat,
+                      longitude: lng,
+                      address: property.location,
+                    ),
                   ),
-                ));
+                );
               },
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -1447,16 +2179,31 @@ class _OwnerLocationSection extends StatelessWidget {
                         fit: BoxFit.cover,
                         loadingBuilder: (c, child, p) => p == null
                             ? child
-                            : const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                            : const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              ),
                         errorBuilder: (c, e, s) => Container(
                           color: const Color(0xFFF5F5F5),
                           child: const Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.map, size: 40, color: AppColors.primary),
+                                Icon(
+                                  Icons.map,
+                                  size: 40,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(height: 6),
-                                Text('موقع العقار', style: TextStyle(color: AppColors.grey, fontSize: 12)),
+                                Text(
+                                  'موقع العقار',
+                                  style: TextStyle(
+                                    color: AppColors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1466,7 +2213,10 @@ class _OwnerLocationSection extends StatelessWidget {
                         bottom: 10,
                         left: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(8),
@@ -1474,10 +2224,20 @@ class _OwnerLocationSection extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.touch_app, color: Colors.white, size: 14),
+                              Icon(
+                                Icons.touch_app,
+                                color: Colors.white,
+                                size: 14,
+                              ),
                               SizedBox(width: 6),
-                              Text('اضغط لعرض الخريطة كاملة',
-                                  style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                              Text(
+                                'اضغط لعرض الخريطة كاملة',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1494,13 +2254,25 @@ class _OwnerLocationSection extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _openGoogleMaps,
-                    icon: const Icon(Icons.directions_outlined, size: 16, color: Colors.white),
-                    label: const Text('الاتجاهات',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                    icon: const Icon(
+                      Icons.directions_outlined,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    label: const Text(
+                      'الاتجاهات',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       elevation: 0,
                     ),
                   ),
@@ -1509,12 +2281,24 @@ class _OwnerLocationSection extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: onEdit,
-                    icon: const Icon(Icons.edit_location_alt_outlined, size: 16, color: AppColors.primary),
-                    label: const Text('تعديل الموقع',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                    icon: const Icon(
+                      Icons.edit_location_alt_outlined,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                    label: const Text(
+                      'تعديل الموقع',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       side: const BorderSide(color: AppColors.primary),
                     ),
                   ),
